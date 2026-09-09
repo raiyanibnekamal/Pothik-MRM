@@ -1,6 +1,8 @@
+import { mapPath, transformResponse } from "./realApi"
+
 const env = import.meta.env.VITE_APP_ENV ?? "local"
 const useMock = import.meta.env.VITE_USE_MOCK !== "false"
-const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3000/api/v1"
+const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
 
 export type Driver = {
   id: string
@@ -243,19 +245,31 @@ export async function api<T>(
   init: RequestInit & { json?: unknown } = {},
 ): Promise<T> {
   if (useMock) return mock(path, init.json, init.method ?? "GET") as Promise<T>
+
+  const method = init.method ?? "GET"
+  const mapped = mapPath(path, method, init.json)
   const headers = new Headers(init.headers)
   headers.set("Content-Type", "application/json")
   if (store.token) headers.set("Authorization", `Bearer ${store.token}`)
-  const res = await fetch(`${apiUrl}${path}`, {
+
+  const payload = mapped.body ?? init.json
+  const res = await fetch(`${apiUrl}${mapped.url}`, {
     ...init,
+    method: mapped.method,
     headers,
-    body: init.json !== undefined ? JSON.stringify(init.json) : init.body,
+    body: payload !== undefined ? JSON.stringify(payload) : init.body,
   })
   const body = await res.json()
   if (!res.ok) {
     throw new Error(body?.error?.message ?? "Request failed")
   }
-  return body.data as T
+
+  if (path === "/auth/login" && body.data?.access_token) {
+    store.token = body.data.access_token as string
+    localStorage.setItem("admin_token", store.token)
+  }
+
+  return transformResponse<T>(path, body.data)
 }
 
 async function mock(path: string, json: unknown, method: string) {
@@ -335,6 +349,15 @@ export function getToken() {
 
 export function envName() {
   return env.toUpperCase()
+}
+
+export async function refreshSosStore() {
+  if (useMock) return
+  try {
+    store.sos = await api<SosRow[]>("/admin/sos")
+  } catch {
+    /* ignore poll errors */
+  }
 }
 
 export { store }

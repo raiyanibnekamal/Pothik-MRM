@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet"
-import { api, type SosRow } from "../api/client"
+import { api, store, type SosRow } from "../api/client"
 import { DangerButton, PrimaryButton } from "../components/ui/Ui"
 import { colors } from "../styles/colors"
 import { useT } from "../i18n/LocaleProvider"
@@ -11,7 +11,9 @@ export function SosPage() {
   const [rows, setRows] = useState<SosRow[]>([])
 
   async function refresh() {
-    setRows(await api<SosRow[]>("/admin/sos"))
+    const data = await api<SosRow[]>("/admin/sos")
+    setRows(data)
+    store.sos = data
   }
 
   useEffect(() => {

@@ -74,6 +74,26 @@ class AdminController extends Controller
         return ApiResponse::success($profile, 'KYC rejected');
     }
 
+    public function listUsers(Request $request)
+    {
+        $query = User::query()->whereIn('role', ['passenger', 'driver']);
+
+        if ($request->search) {
+            $term = '%'.$request->search.'%';
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', $term)->orWhere('phone', 'like', $term);
+            });
+        }
+
+        if ($request->role) {
+            $query->where('role', $request->role);
+        }
+
+        return ApiResponse::success(
+            $query->orderByDesc('created_at')->paginate(30)
+        );
+    }
+
     public function blockUser(Request $request, string $id)
     {
         $request->validate(['blocked' => 'required|boolean']);

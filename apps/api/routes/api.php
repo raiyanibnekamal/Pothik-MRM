@@ -74,6 +74,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/kyc/pending', [AdminController::class, 'pendingKyc']);
             Route::post('/kyc/{id}/approve', [AdminController::class, 'approveKyc']);
             Route::post('/kyc/{id}/reject', [AdminController::class, 'rejectKyc']);
+            Route::get('/users', [AdminController::class, 'listUsers']);
             Route::post('/users/{id}/block', [AdminController::class, 'blockUser']);
             Route::get('/rides', [AdminController::class, 'listRides']);
             Route::put('/vehicle-types/{id}', [AdminController::class, 'updateVehicleType']);

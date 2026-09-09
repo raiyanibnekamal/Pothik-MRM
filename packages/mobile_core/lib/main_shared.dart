@@ -5,6 +5,7 @@ import 'package:mobile_core/core/app_role.dart';
 import 'package:mobile_core/core/connectivity/connectivity_cubit.dart';
 import 'package:mobile_core/core/driver/driver_session_cubit.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
+import 'package:mobile_core/core/network/backend_factory.dart';
 import 'package:mobile_core/core/network/mock_backend.dart';
 import 'package:mobile_core/core/ride/ride_cubit.dart';
 import 'package:mobile_core/core/router/app_router.dart';
@@ -17,7 +18,7 @@ import 'package:mobile_core/native/gps_channel.dart';
 
 Future<void> runBdRideShareApp(AppRole role) async {
   WidgetsFlutterBinding.ensureInitialized();
-  final backend = MockBackend();
+  final backend = createBackend();
   final store = SecureStore();
   final session = SessionCubit(role: role, backend: backend, store: store);
   await session.restore();
