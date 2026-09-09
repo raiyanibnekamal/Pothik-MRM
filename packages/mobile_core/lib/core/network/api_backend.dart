@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:mobile_core/core/app_role.dart';
-import 'package:mobile_core/core/config/bd_phone.dart';
 import 'package:mobile_core/core/models/models.dart';
 import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/network/mock_backend.dart';
