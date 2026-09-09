@@ -1,4 +1,4 @@
-# BD Ride Share (বিডি রাইড শেয়ার)
+# Pothik MRM — BD Ride Share (বিডি রাইড শেয়ার)
 
 Uber-class ride-hailing platform for Bangladesh — monorepo.
 
@@ -84,18 +84,6 @@ infra/docker/
 docs/
 scripts/
 ```
-
-## Git branch workflow
-
-```bash
-git checkout -b feature/backend-p0
-# work in apps/api/
-git add apps/api infra packages/shared-types packages/shared-constants
-git commit -m "feat(api): P0 Laravel backend — auth, rides, SOS, admin"
-git push -u origin feature/backend-p0
-```
-
-Frontend team consumes `/api/v1` — contract in this README + Postman collection (TODO).
 
 ## Queue & scheduler
 
