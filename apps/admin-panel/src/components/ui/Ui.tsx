@@ -52,6 +52,7 @@ export function Field({
       <span className="mb-[8px] block text-[14px] font-medium">{label}</span>
       <input
         {...props}
+        aria-label={label}
         className="h-[56px] w-full rounded-[12px] border border-[var(--border-strong)] bg-[var(--surface)] px-[16px] text-[16px] text-[var(--text-primary)]"
       />
     </label>

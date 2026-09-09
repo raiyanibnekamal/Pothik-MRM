@@ -1,4 +1,9 @@
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { defineConfig } from "@playwright/test"
+
+const root = path.join(fileURLToPath(new URL(".", import.meta.url)), "../..")
+const adminDir = path.join(root, "apps/admin-panel")
 
 export default defineConfig({
   testDir: "./specs",
@@ -9,7 +14,8 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "pnpm --filter admin-panel dev -- --host 127.0.0.1 --port 5173",
+    command: "pnpm exec vite --host 127.0.0.1 --port 5173",
+    cwd: adminDir,
     url: "http://127.0.0.1:5173",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
