@@ -39,3 +39,19 @@ remote: error: GH006: Protected branch update failed
 gh auth login
 .\scripts\setup-branch-protection.ps1
 ```
+
+Until this runs, collaborators with **Write** access can still push to `main` directly.
+
+## Local setup
+
+Windows: `.\scripts\setup.ps1`  
+Linux/macOS: `./scripts/setup.sh`
+
+## Real API (admin)
+
+Copy `apps/admin-panel/.env.example` → `.env`:
+
+```
+VITE_API_URL=http://localhost:8000/api/v1
+VITE_USE_MOCK=false
+```

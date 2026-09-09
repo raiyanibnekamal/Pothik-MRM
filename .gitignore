@@ -16,8 +16,12 @@ service-account.json
 
 # Frontend
 node_modules/
+**/package-lock.json
 dist/
 build/
+playwright-report/
+test-results/
+**/test-results/
 .dart_tool/
 .packages
 .pub-cache/
