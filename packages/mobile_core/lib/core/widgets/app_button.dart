@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_core/core/theme/app_colors.dart';
 import 'package:mobile_core/core/theme/app_radius.dart';
 import 'package:mobile_core/core/theme/app_text.dart';
+import 'package:mobile_core/core/widgets/pressable.dart';
 
 enum AppButtonVariant { primary, secondary, danger, text }
 
@@ -14,6 +15,7 @@ class AppButton extends StatelessWidget {
     this.loading = false,
     this.expand = true,
     this.height = 48,
+    this.trailing,
   });
 
   final String label;
@@ -22,12 +24,15 @@ class AppButton extends StatelessWidget {
   final bool loading;
   final bool expand;
   final double height;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final disabled = onPressed == null || loading;
     final child = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 150),
+      duration: Pressable.duration,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
       child: loading
           ? SizedBox(
               key: const ValueKey('spin'),
@@ -42,55 +47,61 @@ class AppButton extends StatelessWidget {
                         : AppColors.interactivePrimary,
               ),
             )
-          : Text(
-              label,
+          : Row(
               key: ValueKey(label),
-              style: AppText.button(_fg()),
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label, style: AppText.button(_fg())),
+                if (trailing != null) ...[
+                  const SizedBox(width: 8),
+                  trailing!,
+                ],
+              ],
             ),
     );
 
-    final button = switch (variant) {
-      AppButtonVariant.primary => Material(
-          color: disabled
-              ? AppColors.interactiveDisabledBg
-              : AppColors.interactiveAccent,
-          borderRadius: AppRadius.mdAll,
-          child: InkWell(
-            onTap: disabled ? null : onPressed,
+    final content = switch (variant) {
+      AppButtonVariant.primary => DecoratedBox(
+          decoration: BoxDecoration(
+            color: disabled
+                ? AppColors.interactiveDisabledBg
+                : AppColors.interactiveAccent,
             borderRadius: AppRadius.mdAll,
-            child: _box(child),
           ),
+          child: _box(child),
         ),
-      AppButtonVariant.secondary => Material(
-          color: Colors.transparent,
-          shape: RoundedRectangleBorder(
+      AppButtonVariant.secondary => DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.transparent,
             borderRadius: AppRadius.mdAll,
-            side: BorderSide(
+            border: Border.all(
               color: disabled
                   ? AppColors.borderDefault
                   : AppColors.interactivePrimary,
             ),
           ),
-          child: InkWell(
-            onTap: disabled ? null : onPressed,
-            borderRadius: AppRadius.mdAll,
-            child: _box(child),
-          ),
+          child: _box(child),
         ),
-      AppButtonVariant.danger => Material(
-          color: disabled ? AppColors.interactiveDisabledBg : AppColors.danger,
-          borderRadius: AppRadius.mdAll,
-          child: InkWell(
-            onTap: disabled ? null : onPressed,
+      AppButtonVariant.danger => DecoratedBox(
+          decoration: BoxDecoration(
+            color: disabled ? AppColors.interactiveDisabledBg : AppColors.danger,
             borderRadius: AppRadius.mdAll,
-            child: _box(child),
           ),
+          child: _box(child),
         ),
-      AppButtonVariant.text => TextButton(
-          onPressed: disabled ? null : onPressed,
+      AppButtonVariant.text => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           child: child,
         ),
     };
+
+    final button = Pressable(
+      enabled: !disabled,
+      onTap: disabled ? null : onPressed,
+      borderRadius: AppRadius.mdAll,
+      child: content,
+    );
 
     if (!expand || variant == AppButtonVariant.text) return button;
     return SizedBox(width: double.infinity, child: button);
@@ -108,8 +119,11 @@ class AppButton extends StatelessWidget {
     };
   }
 
-  Widget _box(Widget child) => SizedBox(
+  Widget _box(Widget child) => AnimatedContainer(
+        duration: Pressable.duration,
+        curve: Curves.easeOutCubic,
         height: height,
-        child: Center(child: child),
+        alignment: Alignment.center,
+        child: child,
       );
 }

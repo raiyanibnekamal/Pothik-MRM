@@ -227,6 +227,68 @@ class S {
   String get firstTripPin => isBn
       ? 'গাড়িতে উঠার আগে PIN বলুন। প্লেট মিলিয়ে নিন।'
       : 'Say the PIN before you get in. Match the plate.';
+  String get navHome => isBn ? 'হোম' : 'Home';
+  String get navServices => isBn ? 'সার্ভিস' : 'Services';
+  String get navActivity => isBn ? 'অ্যাক্টিভিটি' : 'Activity';
+  String get navAccount => isBn ? 'অ্যাকাউন্ট' : 'Account';
+  String get forYou => isBn ? 'আপনার জন্য' : 'For you';
+  String get later => isBn ? 'পরে' : 'Later';
+  String get trip => isBn ? 'ট্রিপ' : 'Trip';
+  String get reserve => isBn ? 'রিজার্ভ' : 'Reserve';
+  String get servicesTitle => isBn ? 'সার্ভিস' : 'Services';
+  String get servicesSubtitle =>
+      isBn ? 'যেখানে খুশি যান' : 'Go anywhere';
+  String get locationBanner => isBn
+      ? 'লোকেশন শেয়ার বন্ধ। চালু করতে ট্যাপ করুন'
+      : 'Location sharing disabled. Tap here to enable';
+  String get whenTrip => isBn ? 'কখন রাইড লাগবে?' : 'When do you need a trip?';
+  String get tripNow => isBn ? 'এখনই' : 'Now';
+  String get tripNowBody =>
+      isBn ? 'এখনই রিকোয়েস্ট করুন, উঠে যান।' : 'Request a trip, hop in and go.';
+  String get tripLater => isBn ? 'পরে' : 'Later';
+  String get tripLaterBody => isBn
+      ? 'আগে থেকে রিজার্ভ করুন, নিশ্চিন্তে থাকুন।'
+      : 'Reserve for extra peace of mind.';
+  String get upcoming => isBn ? 'আসন্ন' : 'Upcoming';
+  String get past => isBn ? 'আগের' : 'Past';
+  String get noUpcoming =>
+      isBn ? 'আসন্ন কোনো ট্রিপ নেই' : 'You have no upcoming trips';
+  String get reserveCta => isBn ? 'ট্রিপ রিজার্ভ করুন →' : 'Reserve your trip →';
+  String get noPast =>
+      isBn ? 'সাম্প্রতিক কোনো অ্যাক্টিভিটি নেই' : "You don't have any recent activity";
+  String get help => isBn ? 'হেল্প' : 'Help';
+  String get wallet => isBn ? 'ওয়ালেট' : 'Wallet';
+  String get safety => isBn ? 'সেফটি' : 'Safety';
+  String get inbox => isBn ? 'ইনবক্স' : 'Inbox';
+  String get safetyHub => isBn ? 'সেফটি হাব' : 'Safety hub';
+  String get safetyPrefs => isBn ? 'সেফটি পছন্দ' : 'Safety preferences';
+  String get safetyPrefsBody => isBn
+      ? 'PIN, গার্ডিয়ান ও ট্রিপ শেয়ার ম্যানেজ করুন।'
+      : 'Manage PIN, guardians and trip share.';
+  String get pinVerification => isBn ? 'PIN যাচাই' : 'PIN verification';
+  String get pinVerificationBody =>
+      isBn ? 'সঠিক গাড়িতে উঠতে PIN ব্যবহার করুন।' : 'Use PIN to get in the right car.';
+  String get emergencyContacts =>
+      isBn ? 'ইমার্জেন্সি কন্টাক্ট' : 'Emergency contacts';
+  String get emergencyContactsBody =>
+      isBn ? 'জরুরি হলে এঁদের জানানো হবে।' : "We'll call them in case of emergency.";
+  String get shareTripLoc =>
+      isBn ? 'ট্রিপ লোকেশন শেয়ার' : 'Share trip location';
+  String get shareTripLocBody =>
+      isBn ? 'কন্টাক্টরা ট্রিপ ফলো করতে পারবে।' : 'Let contacts follow your trips.';
+  String get cashOnlyNote => isBn
+      ? 'P0-তে শুধু ক্যাশ। ওয়ালেট পরে আসবে।'
+      : 'Cash only in P0. Wallet comes later.';
+  String get manageAccount =>
+      isBn ? 'অ্যাকাউন্ট ম্যানেজ' : 'Manage account';
+  String get contacts => isBn ? 'কন্টাক্ট' : 'Contacts';
+  String get welcomeTitle =>
+      isBn ? 'বিডি রাইড শেয়ারে স্বাগতম' : 'Welcome to BD Ride Share';
+  String get welcomeBody =>
+      isBn ? 'প্রথম ট্রিপ বুক করতে সাহায্য লাগবে?' : 'Need help booking your first trip?';
+  String get welcomeYes => isBn ? 'হ্যাঁ, সাহায্য লাগবে' : 'Yes, I need help';
+  String get welcomeNo => isBn ? 'না ধন্যবাদ' : 'No thanks';
+  String get ratingLabel => isBn ? 'রেটিং' : 'Rating';
 }
 
 class SDelegate extends LocalizationsDelegate<S> {
