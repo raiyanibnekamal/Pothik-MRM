@@ -4,97 +4,109 @@ Uber-class ride-hailing platform for Bangladesh — monorepo.
 
 | Layer | Stack |
 |---|---|
-| **Backend** | Laravel 9 · MySQL 8 · Redis · JWT · Broadcasting |
-| **Mobile** | Flutter (passenger + driver) — separate team |
-| **Admin** | React + Vite — separate team |
+| **Backend** | Laravel 9 · MySQL 8 · Redis · JWT |
+| **Passenger / Driver** | Flutter |
+| **Admin** | React + Vite + Tailwind |
 
-## Quick start (backend)
+## Project structure
 
-### Prerequisites
-- PHP 8.0+
-- Composer
-- MySQL 8
-- Redis
-- Docker (optional)
+```
+apps/
+  api/              ← Laravel backend
+  passenger-app/    ← Flutter
+  driver-app/       ← Flutter
+  admin-panel/      ← React admin
+packages/
+  mobile_core/      ← shared Flutter
+  ui/               ← design tokens
+  shared-types/     ← socket events (BE + FE)
+  shared-constants/
+infra/docker/       ← MySQL + Redis
+scripts/
+```
 
-### Local setup
+---
+
+## Backend (API)
 
 ```bash
-# 1. Start MySQL + Redis (Docker)
 docker compose -f infra/docker/docker-compose.yml up -d mysql redis
 
-# 2. API setup
 cd apps/api
 cp .env.example .env
 composer install
 php artisan key:generate
 php artisan jwt:secret -f
-
-# Edit .env — set DB_DATABASE=bd_ride_share, DB_PASSWORD=secret (or your values)
-
-# 3. Migrate + seed
 php artisan migrate --seed
-
-# 4. Run
 php artisan serve
-# API → http://localhost:8000
+# → http://localhost:8000
 ```
 
-Health check: `GET http://localhost:8000/api/v1/health`
+Health: `GET http://localhost:8000/api/v1/health`
 
-### Default admin (local seed)
-- Email: `admin@bdride.share`
-- Password: `Admin@12345`
+**Seed admin:** `admin@bdride.share` / `Admin@12345`
 
-### OTP (local)
-OTP codes are logged to `storage/logs/laravel.log` — no SMS in local.
-
-## API base URL
+**Local OTP:** logged to `apps/api/storage/logs/laravel.log`
 
 All routes: `/api/v1/...`
 
-Response envelope:
-```json
-{ "success": true, "data": {}, "message": "..." }
-{ "success": false, "error": { "code": "OTP_EXPIRED", "message": "..." } }
-```
+---
 
-## P0 modules (backend)
+## Frontend
 
-| Module | Endpoints |
-|---|---|
-| Auth | OTP, refresh, logout, admin login, device token |
-| Profile | GET/PATCH profile, emergency contacts |
-| Driver | onboarding, docs, availability, location, earnings |
-| Rides | estimate, book, accept/decline, PIN, cash, rate, history |
-| SOS | trigger, cancel, resolve, admin war room |
-| Admin | dashboard, live map, KYC, config, holding |
-| Public | `/public/track/{token}` — guardian tracking |
-
-## Project structure
-
-```
-apps/api/           ← Laravel backend (you)
-apps/passenger-app/ ← Flutter (frontend team)
-apps/driver-app/
-apps/admin-panel/
-packages/shared-types/
-packages/shared-constants/
-infra/docker/
-docs/
-scripts/
-```
-
-## Queue & scheduler
+### Admin (http://localhost:5173)
 
 ```bash
-php artisan queue:work redis
-php artisan schedule:work   # releases held payouts hourly
+pnpm install
+cd apps/admin-panel
+pnpm dev
 ```
+
+Set `VITE_API_URL=http://localhost:8000/api/v1` in `apps/admin-panel/.env`
+
+### Passenger / Driver (Flutter)
+
+```bash
+cd apps/passenger-app && flutter pub get && flutter run
+cd apps/driver-app && flutter pub get && flutter run
+```
+
+### Test user (frontend mock / staging)
+
+| Field | Value |
+|---|---|
+| Phone | `0152170004` |
+| OTP | `123456` |
+| Ride PIN | `4821` |
+| Admin alt | `ops@bdrideshare.com` / `Admin@1234` |
+
+---
+
+## Run everything locally
+
+```bash
+# Terminal 1 — API
+cd apps/api && php artisan serve
+
+# Terminal 2 — Admin
+cd apps/admin-panel && pnpm dev
+
+# Terminal 3 — Flutter
+cd apps/passenger-app && flutter run
+```
+
+---
+
+## Git workflow (team)
+
+- **`main`** — full monorepo (backend + frontend merged)
+- Feature branches from `main`: `feature/backend-*`, `feature/frontend-*`
+- PR → `main`
+
+---
 
 ## Tests
 
 ```bash
-cd apps/api
-php artisan test
+cd apps/api && php artisan test
 ```

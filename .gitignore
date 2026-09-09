@@ -1,7 +1,8 @@
 .env
 .env.*
 !.env.example
-node_modules/
+
+# Backend (Laravel)
 vendor/
 apps/api/vendor/
 apps/api/.env
@@ -10,11 +11,37 @@ apps/api/storage/framework/cache/*
 apps/api/storage/framework/sessions/*
 apps/api/storage/framework/views/*
 apps/api/bootstrap/cache/*
-*.log
-.DS_Store
-.idea/
-.vscode/
-build/
-.dart_tool/
 service-account.json
 *.pem
+
+# Frontend
+node_modules/
+dist/
+build/
+.dart_tool/
+.packages
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+*.jks
+*.keystore
+
+# Flutter/Android/iOS
+apps/**/android/.gradle/
+apps/**/android/local.properties
+apps/**/android/app/debug
+apps/**/android/app/profile
+apps/**/android/app/release
+apps/**/ios/Pods/
+apps/**/ios/.symlinks/
+apps/**/ios/Flutter/Flutter.framework
+apps/**/ios/Flutter/Flutter.podspec
+
+# IDE / OS
+.idea/
+.vscode/
+*.log
+coverage/
+.DS_Store
+Thumbs.db
