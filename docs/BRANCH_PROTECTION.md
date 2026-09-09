@@ -1,38 +1,57 @@
-# Main branch protection
+# Main branch protection — enable now (2 min)
 
-## What it does
+## What you get
 
-- Only **raiyanibnekamal** can push or merge to `main`
-- Collaborators: **feature branch + Pull Request** only
-- CI must pass (4 checks) before merge
-- Code owner review required (see `.github/CODEOWNERS`)
+- Collaborators **cannot** push or merge to `main`
+- They use: `feature/xyz` branch → Pull Request → you approve → you merge
+- CI must pass (4 checks)
 
-## Enable (pick one)
+---
 
-### A) Automatic (after latest push)
+## Option A — GitHub UI (fastest, no token)
 
-Workflow **Enable Main Branch Protection** runs when the workflow file is pushed.
+1. Open: https://github.com/raiyanibnekamal/Pothik-MRM/settings/branches
+2. **Add branch ruleset** or **Add classic rule** → branch name: `main`
+3. Enable:
+   - **Require a pull request before merging**
+   - **Require approvals** → 1
+   - **Require review from Code Owners**
+   - **Require status checks** → select: `Laravel API`, `Admin panel`, `Flutter analyze`, `Admin E2E smoke`
+   - **Require conversation resolution**
+   - **Restrict who can push** → add only: `raiyanibnekamal`
+   - **Do not allow bypassing** (optional)
+   - Block force pushes / deletions
+4. **Save**
 
-If it fails with **403**, go to **GitHub → Settings → Actions → General → Workflow permissions** → select **Read and write permissions** → Save, then re-run the workflow.
+---
 
-### B) Manual from GitHub UI
+## Option B — GitHub Actions (one-time)
 
-**Actions** → **Enable Main Branch Protection** → **Run workflow**
+1. Create PAT: https://github.com/settings/tokens/new  
+   Scope: **repo** (full) or fine-grained **Administration: Read and write** on this repo
+2. Repo → **Settings → Secrets and variables → Actions → New secret**  
+   Name: `GH_ADMIN_TOKEN`  
+   Value: your PAT
+3. **Actions → Enable Main Branch Protection → Run workflow**
 
-### C) Local script (owner)
+---
+
+## Option C — Local script (owner)
 
 ```powershell
 gh auth login
 .\scripts\setup-branch-protection.ps1
 ```
 
+Device login: https://github.com/login/device
+
+---
+
 ## Verify
 
-**Settings → Branches → main** should show a protection rule.
-
-Test as collaborator:
+Collaborator test:
 
 ```bash
 git push origin main
-# → rejected: protected branch
+# → remote: GH006 Protected branch update failed
 ```

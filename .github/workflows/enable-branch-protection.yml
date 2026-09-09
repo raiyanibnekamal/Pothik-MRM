@@ -1,18 +1,10 @@
-# One-time (or manual retry): lock main so only owner can push/merge.
-# Auto-runs when this file is pushed; or: Actions → Enable Main Branch Protection → Run workflow
+# Lock main: only owner pushes/merges. Run once after adding secret GH_ADMIN_TOKEN.
+# Create token: GitHub → Settings → Developer settings → PAT → repo → Administration: Read and write
+# Repo secret: Settings → Secrets → Actions → GH_ADMIN_TOKEN
 name: Enable Main Branch Protection
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/enable-branch-protection.yml
-      - scripts/branch-protection-main.json
-
-permissions:
-  administration: write
-  contents: read
 
 jobs:
   protect-main:
@@ -21,25 +13,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Apply branch protection to main
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs')
-            const cfg = JSON.parse(
-              fs.readFileSync('scripts/branch-protection-main.json', 'utf8'),
-            )
-            try {
-              await github.rest.repos.updateBranchProtection({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                branch: 'main',
-                ...cfg,
-              })
-              core.info('Branch protection enabled on main.')
-            } catch (error) {
-              core.error(error.message)
-              core.error(
-                'If 403: GitHub → Settings → Actions → General → Workflow permissions → Read and write, then re-run this workflow.',
-              )
-              throw error
-            }
+        env:
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Missing secret GH_ADMIN_TOKEN. See docs/BRANCH_PROTECTION.md"
+            exit 1
+          fi
+          gh api --method PUT \
+            repos/raiyanibnekamal/Pothik-MRM/branches/main/protection \
+            --input scripts/branch-protection-main.json
