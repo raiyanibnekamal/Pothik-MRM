@@ -8,7 +8,7 @@ export function PrimaryButton({
   return (
     <button
       {...props}
-      className="inline-flex h-[48px] w-full items-center justify-center rounded-[12px] bg-[var(--interactive-accent)] px-[16px] text-[16px] font-semibold text-[var(--text-on-accent)] disabled:bg-[var(--interactive-disabled-bg)] disabled:text-[var(--interactive-disabled-text)]"
+      className="inline-flex h-[48px] w-full items-center justify-center rounded-[12px] bg-[var(--interactive-accent)] px-[16px] text-[16px] font-semibold text-[var(--text-on-accent)] transition-all duration-500 ease-out hover:brightness-105 active:scale-[0.96] disabled:bg-[var(--interactive-disabled-bg)] disabled:text-[var(--interactive-disabled-text)] disabled:active:scale-100"
     >
       {loading ? "…" : children}
     </button>
@@ -22,7 +22,7 @@ export function SecondaryButton({
   return (
     <button
       {...props}
-      className="inline-flex h-[48px] items-center justify-center rounded-[12px] border border-[var(--interactive-primary)] bg-transparent px-[16px] text-[16px] font-semibold text-[var(--interactive-primary)]"
+      className="inline-flex h-[48px] items-center justify-center rounded-[12px] border border-[var(--interactive-primary)] bg-transparent px-[16px] text-[16px] font-semibold text-[var(--interactive-primary)] transition-all duration-500 ease-out hover:bg-[var(--navy-50)] active:scale-[0.96]"
     >
       {children}
     </button>
@@ -36,7 +36,7 @@ export function DangerButton({
   return (
     <button
       {...props}
-      className="inline-flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--danger)] px-[16px] text-[16px] font-semibold text-[var(--text-on-primary)]"
+      className="inline-flex h-[48px] items-center justify-center rounded-[12px] bg-[var(--danger)] px-[16px] text-[16px] font-semibold text-[var(--text-on-primary)] transition-all duration-500 ease-out hover:brightness-105 active:scale-[0.96]"
     >
       {children}
     </button>

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
 import 'package:mobile_core/core/models/models.dart';
+import 'package:mobile_core/core/network/mock_backend.dart';
 import 'package:mobile_core/core/ride/ride_cubit.dart';
 import 'package:mobile_core/core/theme/app_colors.dart';
 import 'package:mobile_core/core/theme/app_radius.dart';
@@ -11,163 +12,263 @@ import 'package:mobile_core/core/theme/app_shadows.dart';
 import 'package:mobile_core/core/theme/app_text.dart';
 import 'package:mobile_core/core/widgets/app_button.dart';
 import 'package:mobile_core/core/widgets/app_chrome.dart';
-import 'package:mobile_core/core/widgets/branded_map.dart';
+import 'package:mobile_core/core/widgets/pressable.dart';
+import 'package:mobile_core/features/passenger/passenger_shared.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
-class PassengerHomeScreen extends StatelessWidget {
-  const PassengerHomeScreen({super.key});
+/// Uber-style home feed: Where to, Later, For you (Bike/Car), recents.
+class PassengerHomeTab extends StatelessWidget {
+  const PassengerHomeTab({super.key, this.onOpenServices});
+
+  final VoidCallback? onOpenServices;
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final ride = context.watch<RideCubit>().state;
+    final recents = context.read<RideCubit>().backend.history;
+
     return Scaffold(
-      body: Stack(
-        children: [
-          BrandedMap(
-            center: ride.pickup,
-            markers: [
-              MapMarkerData(point: ride.pickup, kind: MapPinKind.me),
-              if (ride.drop != null)
-                MapMarkerData(point: ride.drop!, kind: MapPinKind.drop),
-            ],
-            onTap: (p) {
-              context.read<RideCubit>().setDrop(p, s.isBn ? 'ম্যাপ পিন' : 'Dropped pin');
-            },
-          ),
-          SafeArea(
-            child: Padding(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const LocationShareBanner(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Center(child: Text(s.brand, style: AppText.title())),
+            ),
+            Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Row(
                 children: [
-                  _roundBtn(
-                    icon: PhosphorIconsBold.user,
-                    label: s.profile,
-                    onTap: () => context.push('/passenger/profile'),
+                  Expanded(
+                    child: Pressable(
+                      onTap: () => context.push('/passenger/search'),
+                      borderRadius: AppRadius.mdAll,
+                      child: Container(
+                        height: 56,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: AppRadius.mdAll,
+                          boxShadow: AppShadows.sm,
+                          border: Border.all(color: AppColors.borderDefault),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              PhosphorIconsBold.magnifyingGlass,
+                              color: AppColors.navy900,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                ride.dropLabel ?? s.whereTo,
+                                style: AppText.label(
+                                  ride.dropLabel == null
+                                      ? AppColors.textSecondary
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  const Spacer(),
-                  _roundBtn(
-                    icon: PhosphorIconsBold.clockCounterClockwise,
-                    label: s.history,
-                    onTap: () => context.push('/passenger/history'),
+                  const SizedBox(width: 10),
+                  Pressable(
+                    onTap: () => showScheduleSheet(context),
+                    borderRadius: BorderRadius.circular(28),
+                    child: Container(
+                      height: 56,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.navy50,
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            PhosphorIconsFill.calendarBlank,
+                            size: 18,
+                            color: AppColors.navy900,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(s.later, style: AppText.label()),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Material(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.mdAll,
-                      child: InkWell(
+            if (recents.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ...recents.take(2).map(
+                (r) => Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Pressable(
+                    onTap: () {
+                      context.read<RideCubit>().setDrop(r.drop, r.dropLabel);
+                      showRideOptions(context);
+                    },
+                    borderRadius: AppRadius.mdAll,
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
                         borderRadius: AppRadius.mdAll,
-                        onTap: () => context.push('/passenger/search'),
-                        child: Container(
-                          constraints: const BoxConstraints(minHeight: 56),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            borderRadius: AppRadius.mdAll,
-                            border: Border.all(color: AppColors.borderDefault),
-                            boxShadow: AppShadows.sm,
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(PhosphorIconsBold.magnifyingGlass,
-                                  color: AppColors.navy900),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  ride.dropLabel ?? s.whereTo,
-                                  style: AppText.label(
-                                    ride.dropLabel == null
-                                        ? AppColors.textSecondary
-                                        : AppColors.textPrimary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        border: Border.all(color: AppColors.borderDefault),
                       ),
-                    ),
-                    Builder(
-                      builder: (context) {
-                        final recents = context.read<RideCubit>().backend.history;
-                        if (recents.isEmpty) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: SizedBox(
-                            height: 44,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: recents.length.clamp(0, 3),
-                              separatorBuilder: (_, _) => const SizedBox(width: 8),
-                              itemBuilder: (context, i) {
-                                final r = recents[i];
-                                return Material(
-                                  color: AppColors.surface,
-                                  borderRadius: AppRadius.mdAll,
-                                  child: InkWell(
-                                    borderRadius: AppRadius.mdAll,
-                                    onTap: () {
-                                      context.read<RideCubit>().setDrop(r.drop, r.dropLabel);
-                                    },
-                                    child: Container(
-                                      alignment: Alignment.center,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                      decoration: BoxDecoration(
-                                        borderRadius: AppRadius.mdAll,
-                                        border: Border.all(color: AppColors.borderDefault),
-                                      ),
-                                      child: Text(r.dropLabel, style: AppText.label()),
-                                    ),
-                                  ),
-                                );
-                              },
+                      child: Row(
+                        children: [
+                          const Icon(
+                            PhosphorIconsRegular.clockCounterClockwise,
+                            color: AppColors.navy900,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(r.dropLabel, style: AppText.label()),
+                                Text(r.pickupLabel, style: AppText.helper()),
+                              ],
                             ),
                           ),
-                        );
-                      },
-                    ),
-                    if (ride.drop != null) ...[
-                      const SizedBox(height: 12),
-                      AppButton(
-                        label: s.compareTitle,
-                        onPressed: () => showRideOptions(context),
+                          const Icon(
+                            PhosphorIconsBold.caretRight,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                        ],
                       ),
-                    ],
-                  ],
+                    ),
+                  ),
                 ),
               ),
+            ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(child: Text(s.forYou, style: AppText.subhead())),
+                  Pressable(
+                    onTap: onOpenServices,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: AppColors.navy50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        PhosphorIconsBold.arrowRight,
+                        size: 16,
+                        color: AppColors.navy900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            SizedBox(
+              height: 120,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  _ForYouChip(
+                    label: s.trip,
+                    icon: PhosphorIconsFill.car,
+                    onTap: () => context.push('/passenger/search'),
+                  ),
+                  _ForYouChip(
+                    label: s.bike,
+                    icon: PhosphorIconsFill.motorcycle,
+                    onTap: () {
+                      context.read<RideCubit>().selectType(MockBackend.bike);
+                      context.push('/passenger/search');
+                    },
+                  ),
+                  _ForYouChip(
+                    label: s.car,
+                    icon: PhosphorIconsFill.carProfile,
+                    onTap: () {
+                      context.read<RideCubit>().selectType(MockBackend.car);
+                      context.push('/passenger/search');
+                    },
+                  ),
+                  _ForYouChip(
+                    label: s.reserve,
+                    icon: PhosphorIconsFill.calendarBlank,
+                    onTap: () => showScheduleSheet(context),
+                  ),
+                ],
+              ),
+            ),
+            if (ride.drop != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: AppButton(
+                  label: s.compareTitle,
+                  trailing: const Icon(
+                    PhosphorIconsBold.arrowRight,
+                    size: 18,
+                    color: AppColors.textOnAccent,
+                  ),
+                  onPressed: () => showRideOptions(context),
+                ),
+              ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
+}
 
-  Widget _roundBtn({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: AppColors.surface,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
+class _ForYouChip extends StatelessWidget {
+  const _ForYouChip({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 14),
+      child: Pressable(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(48),
         child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(icon, color: AppColors.navy900, size: 20),
+          width: 84,
+          child: Column(
+            children: [
+              VectorPulse(
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: const BoxDecoration(
+                    color: AppColors.navy50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 32, color: AppColors.navy900),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(label, style: AppText.caption(AppColors.navy900)),
+            ],
+          ),
         ),
       ),
     );
@@ -240,16 +341,20 @@ class _SearchScreenState extends State<SearchScreen> {
             child: ListView(
               children: [
                 for (final p in filtered)
-                  ListTile(
-                    leading: const Icon(PhosphorIconsRegular.mapPin,
-                        color: AppColors.navy900),
-                    title: Text(p.$1, style: AppText.label()),
-                    minVerticalPadding: 16,
+                  Pressable(
                     onTap: () {
                       context.read<RideCubit>().setDrop(p.$2, p.$1);
                       context.pop();
                       showRideOptions(context);
                     },
+                    child: ListTile(
+                      leading: const Icon(
+                        PhosphorIconsRegular.mapPin,
+                        color: AppColors.navy900,
+                      ),
+                      title: Text(p.$1, style: AppText.label()),
+                      minVerticalPadding: 16,
+                    ),
                   ),
               ],
             ),
@@ -318,8 +423,39 @@ class _RideOptionsBody extends StatelessWidget {
                 const SizedBox(height: 8),
                 AppBadge(label: s.cash, tone: BadgeTone.navy),
                 const SizedBox(height: 16),
+                Pressable(
+                  onTap: () {},
+                  borderRadius: AppRadius.mdAll,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.navy50,
+                      borderRadius: AppRadius.mdAll,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          PhosphorIconsFill.money,
+                          color: AppColors.success,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(s.cash, style: AppText.label())),
+                        const Icon(
+                          PhosphorIconsBold.caretRight,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 AppButton(
-                  label: s.bookRide,
+                  label: '${s.bookRide} · ${t.label(s.isBn)}',
                   loading: state.busy,
                   onPressed: () {
                     Navigator.pop(context);
@@ -364,41 +500,44 @@ class _TypeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    return Material(
-      color: selected ? AppColors.navy50 : AppColors.surface,
+    return Pressable(
+      onTap: onTap,
       borderRadius: AppRadius.mdAll,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.mdAll,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: AppRadius.mdAll,
-            border: Border.all(
-              color: selected ? AppColors.navy900 : AppColors.borderDefault,
-            ),
+      child: AnimatedContainer(
+        duration: Pressable.duration,
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.navy50 : AppColors.surface,
+          borderRadius: AppRadius.mdAll,
+          border: Border.all(
+            color: selected ? AppColors.navy900 : AppColors.borderDefault,
+            width: selected ? 2 : 1,
           ),
-          child: Row(
-            children: [
-              Icon(
+        ),
+        child: Row(
+          children: [
+            VectorPulse(
+              enabled: selected,
+              child: Icon(
                 type.code == 'BIKE'
                     ? PhosphorIconsRegular.motorcycle
                     : PhosphorIconsRegular.car,
                 color: AppColors.navy900,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(type.label(s.isBn), style: AppText.label()),
-                    Text(s.etaMin(type.etaMin), style: AppText.helper()),
-                  ],
-                ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(type.label(s.isBn), style: AppText.label()),
+                  Text(s.etaMin(type.etaMin), style: AppText.helper()),
+                ],
               ),
-              Text(formatTaka(fare.total), style: AppText.heroNumber()),
-            ],
-          ),
+            ),
+            Text(formatTaka(fare.total), style: AppText.heroNumber()),
+          ],
         ),
       ),
     );

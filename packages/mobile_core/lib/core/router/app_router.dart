@@ -14,6 +14,7 @@ import 'package:mobile_core/features/driver/home_screen.dart';
 import 'package:mobile_core/features/driver/onboarding_screens.dart';
 import 'package:mobile_core/features/passenger/finding_history.dart';
 import 'package:mobile_core/features/passenger/home_screen.dart';
+import 'package:mobile_core/features/passenger/shell_screens.dart';
 import 'package:mobile_core/features/passenger/tracking_screen.dart';
 import 'package:mobile_core/features/profile/profile_screens.dart';
 import 'package:mobile_core/features/sos/sos_flow.dart';
@@ -97,7 +98,7 @@ GoRouter createRouter({
       GoRoute(path: '/profile-setup', builder: (_, _) => const ProfileSetupScreen()),
       GoRoute(path: '/permission', builder: (_, _) => const PermissionPrimerScreen()),
       GoRoute(path: '/force-update', builder: (_, _) => const ForceUpdateScreen()),
-      GoRoute(path: '/passenger/home', builder: (_, _) => const PassengerHomeScreen()),
+      GoRoute(path: '/passenger/home', builder: (_, _) => const PassengerShell()),
       GoRoute(path: '/passenger/search', builder: (_, _) => const SearchScreen()),
       GoRoute(path: '/passenger/finding', builder: (_, _) => const FindingDriverScreen()),
       GoRoute(path: '/passenger/tracking', builder: (_, _) => const TrackingScreen()),
@@ -106,6 +107,7 @@ GoRouter createRouter({
       GoRoute(path: '/passenger/history', builder: (_, _) => const HistoryScreen()),
       GoRoute(path: '/passenger/profile', builder: (_, _) => const ProfileScreen()),
       GoRoute(path: '/passenger/guardians', builder: (_, _) => const GuardiansScreen()),
+      GoRoute(path: '/passenger/safety', builder: (_, _) => const SafetyHubScreen()),
       GoRoute(path: '/driver/personal', builder: (_, _) => const DriverPersonalScreen()),
       GoRoute(path: '/driver/vehicle', builder: (_, _) => const DriverVehicleScreen()),
       GoRoute(path: '/driver/documents', builder: (_, _) => const DriverDocumentsScreen()),
