@@ -290,6 +290,9 @@ class DriverRequest extends Equatable {
     required this.dropArea,
     required this.paymentMethod,
     required this.seconds,
+    required this.pickup,
+    required this.drop,
+    this.pickupArea = '',
   });
 
   final String rideId;
@@ -298,6 +301,9 @@ class DriverRequest extends Equatable {
   final String dropArea;
   final String paymentMethod;
   final int seconds;
+  final LatLng pickup;
+  final LatLng drop;
+  final String pickupArea;
 
   @override
   List<Object?> get props => [rideId];

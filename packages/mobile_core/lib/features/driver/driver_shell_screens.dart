@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_core/core/driver/driver_session_cubit.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
+import 'package:mobile_core/core/location/location_cubit.dart';
 import 'package:mobile_core/core/models/models.dart';
 import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/session/session_cubit.dart';
@@ -526,8 +527,15 @@ class DriverAccountTab extends StatelessWidget {
                     subtitle: Text(s.driverBatteryHint, style: AppText.helper()),
                     value: saver,
                     activeThumbColor: AppColors.navy900,
-                    onChanged: (v) =>
-                        context.read<DriverSessionCubit>().setBatterySaver(v),
+                    onChanged: (v) {
+                      final driver = context.read<DriverSessionCubit>();
+                      driver.setBatterySaver(v);
+                      if (driver.state.online) {
+                        context
+                            .read<LocationCubit>()
+                            .restartStream(highAccuracy: !v);
+                      }
+                    },
                   ),
                   const Divider(height: 1),
                   ListTile(

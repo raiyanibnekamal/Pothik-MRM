@@ -67,6 +67,45 @@ class S {
       ? 'পিকআপ সেট করতে, কাছের ড্রাইভার দেখাতে এবং আপনার ট্রিপ ট্র্যাক করতে লোকেশন লাগে। বিজ্ঞাপনের জন্য শেয়ার করি না।'
       : 'We use your location to set pickup, show nearby drivers, and keep your trip visible to you. We never share it for ads.';
   String get allowLocation => isBn ? 'এগিয়ে যান' : 'Continue';
+  String get locationNeeded => isBn
+      ? 'লোকেশন চালু করুন, তা ছাড়া চলবে না'
+      : 'Turn on location to continue';
+  String get locationServiceOff =>
+      isBn ? 'ফোনের লোকেশন বন্ধ আছে' : 'Phone location is off';
+  String get locationDenied =>
+      isBn ? 'লোকেশন অনুমতি দেওয়া হয়নি' : 'Location permission not granted';
+  String get locationBlockedBody => isBn
+      ? 'সেটিংস থেকে লোকেশন অনুমতি দিন, তাহলে ম্যাপে আপনার আসল জায়গা দেখাবে।'
+      : 'Allow location in settings so the map can show where you really are.';
+  String get locationTurnOn => isBn ? 'চালু করুন' : 'Turn on';
+  String get locationOpenSettings => isBn ? 'সেটিংস খুলুন' : 'Open settings';
+  String get locationSearching =>
+      isBn ? 'আপনার জায়গা খোঁজা হচ্ছে…' : 'Finding your location…';
+  String get locationWeak => isBn
+      ? 'GPS সিগন্যাল দুর্বল — খোলা জায়গায় যান'
+      : 'Weak GPS signal — move to open sky';
+  String locationAccuracy(int metres) =>
+      isBn ? 'নির্ভুলতা ±$metres মিটার' : 'Accurate to ±$metres m';
+  String get currentLocation => isBn ? 'বর্তমান লোকেশন' : 'Current location';
+  String get useCurrentLocation =>
+      isBn ? 'আমার বর্তমান লোকেশন' : 'Use my current location';
+  String get pickOnMap => isBn ? 'ম্যাপে জায়গা বাছুন' : 'Set location on map';
+  String get pickupPointTitle => isBn ? 'পিকআপ পয়েন্ট' : 'Pickup point';
+  String get dropPointTitle => isBn ? 'গন্তব্য' : 'Destination';
+  String get dragMapHint => isBn
+      ? 'ম্যাপ সরিয়ে পিনটি সঠিক জায়গায় আনুন'
+      : 'Drag the map to place the pin';
+  String get confirmLocation => isBn ? 'এই জায়গা নিশ্চিত' : 'Confirm location';
+  String get searchNoResults =>
+      isBn ? 'কিছু পাওয়া যায়নি' : 'Nothing found';
+  String get searchOffline => isBn
+      ? 'ঠিকানা খোঁজা যাচ্ছে না — ম্যাপে বাছুন'
+      : 'Address search unavailable — pick on map';
+  String routeSummary(String km, int min) =>
+      isBn ? '$km কিমি · $min মিনিট' : '$km km · $min min';
+  String get routeApprox => isBn
+      ? 'রাস্তা আনা যায়নি, সরলরেখায় হিসাব'
+      : 'Road data unavailable, showing direct line';
   String get whereTo => isBn ? 'কোথায় যাবেন?' : 'Where to?';
   String get recents => isBn ? 'সাম্প্রতিক' : 'Recent';
   String get compareTitle => isBn ? 'রাইড বেছে নিন' : 'Choose a ride';

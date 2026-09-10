@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:mobile_core/core/location/route_service.dart';
 import 'package:mobile_core/core/models/models.dart';
 import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/network/mock_backend.dart';
@@ -20,7 +21,7 @@ class RideState extends Equatable {
     this.phase = RidePhase.idle,
     this.pickup = dhakaPickup,
     this.drop,
-    this.pickupLabel = 'Gulshan 2',
+    this.pickupLabel = '',
     this.dropLabel,
     this.types = const [],
     this.selectedType,
@@ -29,6 +30,11 @@ class RideState extends Equatable {
     this.busy = false,
     this.error,
     this.matchedAt,
+    this.pickupIsManual = false,
+    this.routePoints = const [],
+    this.routeKm,
+    this.routeEtaMin,
+    this.routeSnapped = false,
   });
 
   static const dhakaPickup = LatLng(23.7925, 90.4078);
@@ -46,6 +52,15 @@ class RideState extends Equatable {
   final String? error;
   final DateTime? matchedAt;
 
+  /// True once the rider picks a pickup by hand, so GPS stops overriding it.
+  final bool pickupIsManual;
+
+  /// Road geometry for pickup to drop, used by the map and the fare estimate.
+  final List<LatLng> routePoints;
+  final double? routeKm;
+  final int? routeEtaMin;
+  final bool routeSnapped;
+
   RideState copyWith({
     RidePhase? phase,
     LatLng? pickup,
@@ -59,9 +74,15 @@ class RideState extends Equatable {
     bool? busy,
     String? error,
     DateTime? matchedAt,
+    bool? pickupIsManual,
+    List<LatLng>? routePoints,
+    double? routeKm,
+    int? routeEtaMin,
+    bool? routeSnapped,
     bool clearDrop = false,
     bool clearRide = false,
     bool clearError = false,
+    bool clearRoute = false,
   }) {
     return RideState(
       phase: phase ?? this.phase,
@@ -76,32 +97,92 @@ class RideState extends Equatable {
       busy: busy ?? this.busy,
       error: clearError ? null : (error ?? this.error),
       matchedAt: matchedAt ?? this.matchedAt,
+      pickupIsManual: pickupIsManual ?? this.pickupIsManual,
+      routePoints: clearRoute ? const [] : (routePoints ?? this.routePoints),
+      routeKm: clearRoute ? null : (routeKm ?? this.routeKm),
+      routeEtaMin: clearRoute ? null : (routeEtaMin ?? this.routeEtaMin),
+      routeSnapped: clearRoute ? false : (routeSnapped ?? this.routeSnapped),
     );
   }
 
   @override
-  List<Object?> get props =>
-      [phase, drop, selectedType, ride, showDriverSheet, busy, error];
+  List<Object?> get props => [
+        phase,
+        pickup,
+        pickupLabel,
+        drop,
+        dropLabel,
+        selectedType,
+        ride,
+        showDriverSheet,
+        busy,
+        error,
+        routePoints,
+        routeKm,
+      ];
 }
 
 class RideCubit extends Cubit<RideState> {
-  RideCubit(this.backend) : super(const RideState()) {
+  RideCubit(this.backend, {RouteService? routes})
+      : routes = routes ?? RouteService(),
+        super(const RideState()) {
     emit(state.copyWith(types: backend.types, selectedType: MockBackend.bike));
   }
 
   final MockBackend backend;
+  final RouteService routes;
 
   void setDrop(LatLng p, String label) {
-    emit(state.copyWith(drop: p, dropLabel: label));
+    emit(state.copyWith(drop: p, dropLabel: label, clearRoute: true));
+    refreshRoute();
+  }
+
+  /// Rider chose a pickup by hand, so later GPS fixes must not move it.
+  void setPickup(LatLng p, String label) {
+    emit(state.copyWith(pickup: p, pickupLabel: label, pickupIsManual: true));
+    refreshRoute();
+  }
+
+  /// A fresh GPS fix. Ignored once the rider has set pickup themselves.
+  void setDevicePickup(LatLng p, {String? label}) {
+    if (state.pickupIsManual) return;
+    if (state.phase != RidePhase.idle && state.phase != RidePhase.estimating) {
+      return;
+    }
+    emit(state.copyWith(pickup: p, pickupLabel: label));
+    refreshRoute();
+  }
+
+  void clearDrop() => emit(state.copyWith(clearDrop: true, clearRoute: true));
+
+  Future<void> refreshRoute() async {
+    final drop = state.drop;
+    if (drop == null) return;
+    final path = await routes.driving(state.pickup, drop);
+    if (isClosed || state.drop != drop) return;
+    emit(state.copyWith(
+      routePoints: path.points,
+      routeKm: path.distanceKm,
+      routeEtaMin: path.durationMin,
+      routeSnapped: path.snapped,
+    ));
   }
 
   void selectType(VehicleType t) => emit(state.copyWith(selectedType: t));
 
   FareBreakdown breakdownFor(VehicleType t) {
+    return backend.estimate(t, _billableKm());
+  }
+
+  double _billableKm() {
+    final km = state.routeKm;
+    if (km != null && km > 0) return km;
+    final drop = state.drop;
+    if (drop == null) return 3.2;
     const d = Distance();
-    final drop = state.drop ?? const LatLng(23.7936, 90.4056);
-    final km = d.as(LengthUnit.Kilometer, state.pickup, drop);
-    return backend.estimate(t, km < 1 ? 3.2 : km);
+    // Straight line under-reads Dhaka roads by roughly a third.
+    final direct = d.as(LengthUnit.Kilometer, state.pickup, drop) * 1.35;
+    return direct < 1 ? 3.2 : direct;
   }
 
   Future<void> book() async {
@@ -113,7 +194,8 @@ class RideCubit extends Cubit<RideState> {
       final ride = await backend.createRide(
         pickup: state.pickup,
         drop: drop,
-        pickupLabel: state.pickupLabel,
+        pickupLabel:
+            state.pickupLabel.isEmpty ? 'Pickup point' : state.pickupLabel,
         dropLabel: state.dropLabel ?? '',
         type: type,
       );
@@ -166,6 +248,7 @@ class RideCubit extends Cubit<RideState> {
       selectedType: MockBackend.bike,
       pickup: state.pickup,
       pickupLabel: state.pickupLabel,
+      pickupIsManual: state.pickupIsManual,
     ));
   }
 

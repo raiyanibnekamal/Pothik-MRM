@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:mobile_core/core/models/models.dart';
 import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/network/mock_backend.dart';
@@ -34,6 +35,9 @@ class DriverSessionState extends Equatable {
     this.rideId,
     this.fareBdt = 0,
     this.cashDone = false,
+    this.driverPoint,
+    this.tripPickup,
+    this.tripDrop,
   });
 
   final bool online;
@@ -51,6 +55,21 @@ class DriverSessionState extends Equatable {
   final int fareBdt;
   final bool cashDone;
 
+  /// Latest GPS fix, mirrored from the location cubit for trip logic.
+  final LatLng? driverPoint;
+  final LatLng? tripPickup;
+  final LatLng? tripDrop;
+
+  /// Where the driver should head next, or null when idle.
+  LatLng? get navTarget => switch (phase) {
+        DriverTripPhase.toPickup ||
+        DriverTripPhase.arrived ||
+        DriverTripPhase.pin =>
+          tripPickup,
+        DriverTripPhase.toDrop || DriverTripPhase.cash => tripDrop,
+        _ => null,
+      };
+
   DriverSessionState copyWith({
     bool? online,
     bool? onBreak,
@@ -66,8 +85,12 @@ class DriverSessionState extends Equatable {
     String? rideId,
     int? fareBdt,
     bool? cashDone,
+    LatLng? driverPoint,
+    LatLng? tripPickup,
+    LatLng? tripDrop,
     bool clearRequest = false,
     bool clearError = false,
+    bool clearTrip = false,
   }) {
     return DriverSessionState(
       online: online ?? this.online,
@@ -84,6 +107,9 @@ class DriverSessionState extends Equatable {
       rideId: rideId ?? this.rideId,
       fareBdt: fareBdt ?? this.fareBdt,
       cashDone: cashDone ?? this.cashDone,
+      driverPoint: driverPoint ?? this.driverPoint,
+      tripPickup: clearTrip ? null : (tripPickup ?? this.tripPickup),
+      tripDrop: clearTrip ? null : (tripDrop ?? this.tripDrop),
     );
   }
 
@@ -91,6 +117,7 @@ class DriverSessionState extends Equatable {
   List<Object?> get props => [
         online,
         onBreak,
+        batterySaver,
         phase,
         request,
         requestLeft,
@@ -100,6 +127,9 @@ class DriverSessionState extends Equatable {
         busy,
         error,
         cashDone,
+        driverPoint,
+        tripPickup,
+        tripDrop,
       ];
 }
 
@@ -146,9 +176,15 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
 
   void setBatterySaver(bool v) => emit(state.copyWith(batterySaver: v));
 
+  /// Mirrors the live GPS fix so offers and navigation use the real position.
+  void updateLocation(LatLng point) {
+    if (state.driverPoint == point) return;
+    emit(state.copyWith(driverPoint: point));
+  }
+
   void _offer() {
     if (!state.online || state.onBreak) return;
-    final req = backend.spawnRequest();
+    final req = backend.spawnRequest(driverAt: state.driverPoint);
     emit(state.copyWith(
       phase: DriverTripPhase.request,
       request: req,
@@ -182,6 +218,8 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
       phase: DriverTripPhase.toPickup,
       rideId: req?.rideId,
       fareBdt: req?.fareBdt ?? 250,
+      tripPickup: req?.pickup,
+      tripDrop: req?.drop,
       clearRequest: true,
     ));
   }
@@ -223,6 +261,8 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
       backend.recordDriverTrip(
         rideId: state.rideId!,
         fareBdt: state.fareBdt,
+        pickup: state.tripPickup,
+        drop: state.tripDrop,
       );
     }
     emit(state.copyWith(
@@ -230,6 +270,7 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
       cashDone: false,
       pin: '',
       rideId: null,
+      clearTrip: true,
     ));
     if (state.online) {
       _demoOffer?.cancel();

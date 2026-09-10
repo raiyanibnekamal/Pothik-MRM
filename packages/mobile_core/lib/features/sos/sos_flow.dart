@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
+import 'package:mobile_core/core/location/location_cubit.dart';
 import 'package:mobile_core/core/models/models.dart';
 import 'package:mobile_core/core/ride/ride_cubit.dart';
 import 'package:mobile_core/core/sos/sos_cubit.dart';
@@ -12,6 +13,7 @@ import 'package:mobile_core/core/theme/app_spacing.dart';
 import 'package:mobile_core/core/theme/app_text.dart';
 import 'package:mobile_core/core/widgets/app_button.dart';
 import 'package:mobile_core/core/widgets/app_chrome.dart';
+import 'package:mobile_core/core/widgets/branded_map.dart';
 import 'package:mobile_core/core/widgets/sos_widgets.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -136,13 +138,30 @@ class SosActiveScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = S.of(context);
     final alert = context.watch<SosCubit>().state.alert;
+    final live = context.watch<LocationCubit>().state;
     return Scaffold(
       appBar: AppBarBack(
         title: s.sos,
         navy: true,
         onBack: () => context.go('/passenger/tracking'),
       ),
-      body: Padding(
+      body: Column(
+        children: [
+          SizedBox(
+            height: 220,
+            child: BrandedMap(
+              center: live.point ?? dhakaCenter,
+              zoom: 16.5,
+              follow: true,
+              showRecenter: true,
+              markers: [
+                if (live.point != null)
+                  MapMarkerData(point: live.point!, kind: MapPinKind.sos),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
         padding: const EdgeInsets.all(AppSpacing.screen),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,7 +169,17 @@ class SosActiveScreen extends StatelessWidget {
             AppBadge(label: 'SOS', tone: BadgeTone.danger),
             const SizedBox(height: 16),
             Text(s.sosActive, style: AppText.title()),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            if (live.point != null)
+              Text(
+                '${live.point!.latitude.toStringAsFixed(5)}, '
+                '${live.point!.longitude.toStringAsFixed(5)}'
+                '${live.accuracyM == null ? '' : ' · ${s.locationAccuracy(live.accuracyM!.round())}'}',
+                style: AppText.helper(),
+              )
+            else
+              Text(s.locationSearching, style: AppText.helper()),
+            const SizedBox(height: 8),
             Text(alert?.trackUrl ?? '', style: AppText.helper()),
             const Spacer(),
             AppButton(
@@ -163,11 +192,21 @@ class SosActiveScreen extends StatelessWidget {
               label: s.shareTrip,
               variant: AppButtonVariant.secondary,
               onPressed: () => SharePlus.instance.share(
-                ShareParams(text: alert?.trackUrl ?? ''),
+                ShareParams(
+                  text: [
+                    alert?.trackUrl ?? '',
+                    if (live.point != null)
+                      'https://maps.google.com/?q='
+                          '${live.point!.latitude},${live.point!.longitude}',
+                  ].where((t) => t.isNotEmpty).join('\n'),
+                ),
               ),
             ),
           ],
         ),
+            ),
+          ),
+        ],
       ),
     );
   }

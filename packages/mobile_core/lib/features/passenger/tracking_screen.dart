@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
+import 'package:mobile_core/core/location/location_cubit.dart';
+import 'package:mobile_core/core/location/route_service.dart';
 import 'package:mobile_core/core/models/models.dart';
 import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/ride/ride_cubit.dart';
@@ -12,6 +15,7 @@ import 'package:mobile_core/core/theme/app_text.dart';
 import 'package:mobile_core/core/widgets/app_button.dart';
 import 'package:mobile_core/core/widgets/app_chrome.dart';
 import 'package:mobile_core/core/widgets/branded_map.dart';
+import 'package:mobile_core/core/widgets/location_widgets.dart';
 import 'package:mobile_core/core/widgets/sos_widgets.dart';
 import 'package:mobile_core/features/shared/rating_sheet.dart';
 import 'package:mobile_core/features/sos/sos_flow.dart';
@@ -28,6 +32,9 @@ class TrackingScreen extends StatefulWidget {
 
 class _TrackingScreenState extends State<TrackingScreen> {
   bool _edu = true;
+  List<LatLng> _route = const [];
+  bool _routeSnapped = true;
+  String _routeKey = '';
 
   @override
   void initState() {
@@ -35,6 +42,41 @@ class _TrackingScreenState extends State<TrackingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ride = context.read<RideCubit>().state;
       if (ride.showDriverSheet) _showFound();
+      _syncRoute();
+    });
+  }
+
+  /// Before pickup the useful line is driver to rider; after that it is the
+  /// trip itself.
+  Future<void> _syncRoute() async {
+    final state = context.read<RideCubit>().state;
+    final ride = state.ride;
+    if (ride == null) return;
+
+    final started = ride.status == RideStatus.inProgress;
+    final from = started ? ride.pickup : (ride.driverPoint ?? ride.pickup);
+    final to = started ? ride.drop : ride.pickup;
+
+    final key = '$started|$from|$to';
+    if (key == _routeKey) return;
+    _routeKey = key;
+
+    if (!started && ride.driverPoint == null) {
+      // Nothing to trace yet, so show the whole trip instead.
+      final path = await context.read<RouteService>().driving(ride.pickup, ride.drop);
+      if (!mounted) return;
+      setState(() {
+        _route = path.points;
+        _routeSnapped = path.snapped;
+      });
+      return;
+    }
+
+    final path = await context.read<RouteService>().driving(from, to);
+    if (!mounted) return;
+    setState(() {
+      _route = path.points;
+      _routeSnapped = path.snapped;
     });
   }
 
@@ -59,6 +101,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     final rideState = context.watch<RideCubit>().state;
     final ride = rideState.ride;
     final sos = context.watch<SosCubit>().state;
+    final live = context.watch<LocationCubit>().state;
     if (ride == null) {
       return const SizedBox.shrink();
     }
@@ -66,19 +109,45 @@ class _TrackingScreenState extends State<TrackingScreen> {
         ride.status == RideStatus.driverArriving ||
         ride.status == RideStatus.accepted ||
         ride.status == RideStatus.driverArrived;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncRoute();
+    });
+
     return Scaffold(
       body: Stack(
         children: [
           BrandedMap(
             center: ride.pickup,
+            route: _route,
+            routeSnapped: _routeSnapped,
+            fitPoints: [
+              ride.pickup,
+              ride.drop,
+              if (ride.driverPoint != null) ride.driverPoint!,
+            ],
+            showRecenter: true,
+            overlayPadding: const EdgeInsets.only(bottom: 300),
             markers: [
               MapMarkerData(point: ride.pickup, kind: MapPinKind.pickup),
               MapMarkerData(point: ride.drop, kind: MapPinKind.drop),
               if (ride.driverPoint != null)
                 MapMarkerData(point: ride.driverPoint!, kind: MapPinKind.driver),
               if (sos.active)
-                MapMarkerData(point: ride.pickup, kind: MapPinKind.sos),
+                MapMarkerData(
+                  point: live.point ?? ride.pickup,
+                  kind: MapPinKind.sos,
+                ),
             ],
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: LocationHealthCard(compact: true),
+              ),
+            ),
           ),
           Align(
             alignment: Alignment.bottomCenter,

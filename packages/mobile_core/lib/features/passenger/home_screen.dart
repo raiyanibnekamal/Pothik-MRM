@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
+import 'package:mobile_core/core/location/geo_service.dart';
 import 'package:mobile_core/core/models/models.dart';
 import 'package:mobile_core/core/network/mock_backend.dart';
 import 'package:mobile_core/core/ride/ride_cubit.dart';
@@ -12,7 +15,10 @@ import 'package:mobile_core/core/theme/app_shadows.dart';
 import 'package:mobile_core/core/theme/app_text.dart';
 import 'package:mobile_core/core/widgets/app_button.dart';
 import 'package:mobile_core/core/widgets/app_chrome.dart';
+import 'package:mobile_core/core/widgets/branded_map.dart';
+import 'package:mobile_core/core/widgets/location_widgets.dart';
 import 'package:mobile_core/core/widgets/pressable.dart';
+import 'package:mobile_core/features/passenger/map_pick_screen.dart';
 import 'package:mobile_core/features/passenger/passenger_shared.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
@@ -38,6 +44,18 @@ class PassengerHomeTab extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Center(child: Text(s.brand, style: AppText.title())),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: LocationHealthCard(),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: _HomeMapPreview(
+                pickup: ride.pickup,
+                pickupLabel:
+                    ride.pickupLabel.isEmpty ? s.currentLocation : ride.pickupLabel,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -232,6 +250,84 @@ class PassengerHomeTab extends StatelessWidget {
   }
 }
 
+/// Live map card on the home feed. Non-interactive so the feed still scrolls;
+/// tapping opens the full picker.
+class _HomeMapPreview extends StatelessWidget {
+  const _HomeMapPreview({required this.pickup, required this.pickupLabel});
+
+  final LatLng pickup;
+  final String pickupLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: () async {
+        final cubit = context.read<RideCubit>();
+        final picked = await showMapPicker(
+          context,
+          mode: MapPickMode.pickup,
+          initial: pickup,
+        );
+        if (picked != null) cubit.setPickup(picked.point, picked.label);
+      },
+      borderRadius: AppRadius.mdAll,
+      child: ClipRRect(
+        borderRadius: AppRadius.mdAll,
+        child: SizedBox(
+          height: 170,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: BrandedMap(
+                  center: pickup,
+                  zoom: 15.5,
+                  interactive: false,
+                  markers: [
+                    MapMarkerData(point: pickup, kind: MapPinKind.pickup),
+                  ],
+                ),
+              ),
+              Positioned(
+                left: 10,
+                right: 10,
+                top: 10,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.mdAll,
+                    boxShadow: AppShadows.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        PhosphorIconsFill.mapPin,
+                        size: 16,
+                        color: AppColors.pickupPin,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          pickupLabel,
+                          style: AppText.label(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const LocationAccuracyChip(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ForYouChip extends StatelessWidget {
   const _ForYouChip({
     required this.label,
@@ -284,45 +380,115 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _c = TextEditingController();
-  final _places = const [
-    ('Gulshan 1', LatLng(23.7806, 90.4193)),
-    ('Banani', LatLng(23.7937, 90.4066)),
-    ('Dhanmondi 27', LatLng(23.7465, 90.3760)),
-    ('Motijheel', LatLng(23.7330, 90.4172)),
-    ('Uttara Sector 7', LatLng(23.8740, 90.4000)),
-    ('Farmgate', LatLng(23.7580, 90.3900)),
-    ('Mirpur 10', LatLng(23.8070, 90.3680)),
-    ('Airport', LatLng(23.8433, 90.3978)),
-  ];
+  Timer? _debounce;
+  List<PlaceHit> _hits = const [];
+  bool _searching = false;
+  bool _searched = false;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _c.dispose();
     super.dispose();
+  }
+
+  void _onQueryChanged(String value) {
+    _debounce?.cancel();
+    if (value.trim().length < 2) {
+      setState(() {
+        _hits = const [];
+        _searching = false;
+        _searched = false;
+      });
+      return;
+    }
+    setState(() => _searching = true);
+    // Nominatim allows roughly one request per second.
+    _debounce = Timer(const Duration(milliseconds: 500), () => _search(value));
+  }
+
+  Future<void> _search(String query) async {
+    final hits = await context.read<GeoService>().search(query);
+    if (!mounted || _c.text != query) return;
+    setState(() {
+      _hits = hits;
+      _searching = false;
+      _searched = true;
+    });
+  }
+
+  void _choose(LatLng point, String label) {
+    context.read<RideCubit>().setDrop(point, label);
+    context.pop();
+    showRideOptions(context);
+  }
+
+  Future<void> _pickOnMap() async {
+    final ride = context.read<RideCubit>().state;
+    final picked = await showMapPicker(
+      context,
+      mode: MapPickMode.drop,
+      initial: ride.drop,
+    );
+    if (picked == null || !mounted) return;
+    _choose(picked.point, picked.label);
+  }
+
+  Future<void> _editPickup() async {
+    final ride = context.read<RideCubit>();
+    final picked = await showMapPicker(
+      context,
+      mode: MapPickMode.pickup,
+      initial: ride.state.pickup,
+    );
+    if (picked == null) return;
+    ride.setPickup(picked.point, picked.label);
   }
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    final q = _c.text.toLowerCase();
-    final filtered = _places
-        .where((p) => q.isEmpty || p.$1.toLowerCase().contains(q))
-        .toList();
+    final ride = context.watch<RideCubit>().state;
+    final recents = context.read<RideCubit>().backend.history;
+
     return Scaffold(
       appBar: AppBarBack(title: s.whereTo),
       body: Column(
         children: [
           Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: _PickupRow(
+              label: ride.pickupLabel.isEmpty ? s.currentLocation : ride.pickupLabel,
+              onTap: _editPickup,
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
               controller: _c,
               autofocus: true,
-              onChanged: (_) => setState(() {}),
+              textInputAction: TextInputAction.search,
+              onChanged: _onQueryChanged,
+              onSubmitted: _search,
               style: AppText.body(),
               decoration: InputDecoration(
                 hintText: s.searchHint,
                 filled: true,
                 fillColor: AppColors.surface,
+                prefixIcon: const Icon(
+                  PhosphorIconsBold.magnifyingGlass,
+                  color: AppColors.navy900,
+                ),
+                suffixIcon: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
                 border: OutlineInputBorder(
                   borderRadius: AppRadius.mdAll,
                   borderSide: const BorderSide(color: AppColors.borderStrong),
@@ -330,36 +496,133 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(s.recents, style: AppText.helper()),
-            ),
-          ),
           Expanded(
             child: ListView(
               children: [
-                for (final p in filtered)
-                  Pressable(
-                    onTap: () {
-                      context.read<RideCubit>().setDrop(p.$2, p.$1);
-                      context.pop();
-                      showRideOptions(context);
-                    },
-                    child: ListTile(
-                      leading: const Icon(
-                        PhosphorIconsRegular.mapPin,
-                        color: AppColors.navy900,
+                _SearchAction(
+                  icon: PhosphorIconsFill.mapTrifold,
+                  label: s.pickOnMap,
+                  onTap: _pickOnMap,
+                ),
+                if (_hits.isNotEmpty) ...[
+                  const Divider(height: 1),
+                  for (final hit in _hits)
+                    Pressable(
+                      onTap: () => _choose(hit.point, hit.label),
+                      child: ListTile(
+                        leading: const Icon(
+                          PhosphorIconsRegular.mapPin,
+                          color: AppColors.navy900,
+                        ),
+                        title: Text(hit.label, style: AppText.label()),
+                        subtitle: Text(hit.detail, style: AppText.helper()),
+                        minVerticalPadding: 12,
                       ),
-                      title: Text(p.$1, style: AppText.label()),
-                      minVerticalPadding: 16,
                     ),
+                ] else if (_searched && !_searching)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(s.searchNoResults, style: AppText.helper()),
                   ),
+                if (recents.isNotEmpty && _hits.isEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Text(s.recents, style: AppText.helper()),
+                  ),
+                  for (final r in recents.take(5))
+                    Pressable(
+                      onTap: () => _choose(r.drop, r.dropLabel),
+                      child: ListTile(
+                        leading: const Icon(
+                          PhosphorIconsRegular.clockCounterClockwise,
+                          color: AppColors.navy900,
+                        ),
+                        title: Text(r.dropLabel, style: AppText.label()),
+                        subtitle: Text(r.pickupLabel, style: AppText.helper()),
+                        minVerticalPadding: 12,
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PickupRow extends StatelessWidget {
+  const _PickupRow({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    return Pressable(
+      onTap: onTap,
+      borderRadius: AppRadius.mdAll,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.navy50,
+          borderRadius: AppRadius.mdAll,
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              PhosphorIconsFill.circlesThreePlus,
+              size: 18,
+              color: AppColors.pickupPin,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.pickupPointTitle, style: AppText.caption()),
+                  Text(
+                    label,
+                    style: AppText.label(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              PhosphorIconsRegular.pencilSimple,
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchAction extends StatelessWidget {
+  const _SearchAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      child: ListTile(
+        leading: Icon(icon, color: AppColors.navy900),
+        title: Text(label, style: AppText.label()),
+        minVerticalPadding: 12,
       ),
     );
   }
@@ -390,6 +653,18 @@ class _RideOptionsBody extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(s.compareTitle, style: AppText.title()),
+          if (state.routeKm != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              s.routeSummary(
+                state.routeKm!.toStringAsFixed(1),
+                state.routeEtaMin ?? 0,
+              ),
+              style: AppText.helper(),
+            ),
+            if (!state.routeSnapped)
+              Text(s.routeApprox, style: AppText.caption(AppColors.warning)),
+          ],
           const SizedBox(height: 16),
           for (final t in state.types.where((t) => t.isActive))
             Padding(

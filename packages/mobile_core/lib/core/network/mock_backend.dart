@@ -314,26 +314,42 @@ class MockBackend {
     return g;
   }
 
-  DriverRequest spawnRequest() {
+  /// Offers are generated around [driverAt] so the map matches where the
+  /// driver actually is instead of a fixed Dhaka fixture.
+  DriverRequest spawnRequest({LatLng? driverAt}) {
+    const distance = Distance();
+    final origin = driverAt ?? const LatLng(23.8103, 90.4125);
+    final pickup = distance.offset(origin, 700, 35);
+    final drop = distance.offset(pickup, 3400, 300);
     openRequest = DriverRequest(
       rideId: 'R${DateTime.now().millisecondsSinceEpoch % 100000}',
-      pickupDistanceKm: 0.7,
+      pickupDistanceKm:
+          double.parse((distance.as(LengthUnit.Meter, origin, pickup) / 1000)
+              .toStringAsFixed(1)),
       fareBdt: 250,
       dropArea: 'Banani',
       paymentMethod: 'CASH',
       seconds: 15,
+      pickup: pickup,
+      drop: drop,
     );
     return openRequest!;
   }
 
-  void recordDriverTrip({required String rideId, required int fareBdt, String dropArea = 'Banani'}) {
+  void recordDriverTrip({
+    required String rideId,
+    required int fareBdt,
+    String dropArea = 'Banani',
+    LatLng? pickup,
+    LatLng? drop,
+  }) {
     history.insert(
       0,
       Ride(
         id: rideId,
         status: RideStatus.completed,
-        pickup: const LatLng(23.7925, 90.4078),
-        drop: const LatLng(23.7937, 90.4066),
+        pickup: pickup ?? const LatLng(23.7925, 90.4078),
+        drop: drop ?? const LatLng(23.7937, 90.4066),
         pickupLabel: 'Gulshan 2',
         dropLabel: dropArea,
         vehicleType: bike,

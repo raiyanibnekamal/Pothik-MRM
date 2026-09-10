@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
+import 'package:mobile_core/core/location/route_service.dart';
 import 'package:mobile_core/core/models/models.dart';
 import 'package:mobile_core/core/ride/ride_cubit.dart';
 import 'package:mobile_core/core/theme/app_colors.dart';
+import 'package:mobile_core/core/theme/app_radius.dart';
 import 'package:mobile_core/core/theme/app_spacing.dart';
 import 'package:mobile_core/core/theme/app_text.dart';
 import 'package:mobile_core/core/widgets/app_button.dart';
@@ -50,11 +53,42 @@ class FindingDriverScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(s.findingHint, style: AppText.body(AppColors.textSecondary)),
                     const SizedBox(height: 24),
-                    const Skeleton(height: 160, radius: 12),
+                    ClipRRect(
+                      borderRadius: AppRadius.mdAll,
+                      child: SizedBox(
+                        height: 200,
+                        child: BrandedMap(
+                          center: state.pickup,
+                          interactive: false,
+                          route: state.routePoints,
+                          routeSnapped: state.routeSnapped,
+                          fitPoints: [
+                            state.pickup,
+                            if (state.drop != null) state.drop!,
+                          ],
+                          markers: [
+                            MapMarkerData(
+                              point: state.pickup,
+                              kind: MapPinKind.pickup,
+                            ),
+                            if (state.drop != null)
+                              MapMarkerData(
+                                point: state.drop!,
+                                kind: MapPinKind.drop,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 12),
-                    const Skeleton(height: 16, width: 180),
-                    const SizedBox(height: 8),
-                    const Skeleton(height: 16, width: 120),
+                    if (state.routeKm != null)
+                      Text(
+                        s.routeSummary(
+                          state.routeKm!.toStringAsFixed(1),
+                          state.routeEtaMin ?? 0,
+                        ),
+                        style: AppText.helper(),
+                      ),
                     const Spacer(),
                     AppButton(
                       label: s.cancelRide,
@@ -122,20 +156,50 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-class TripDetailScreen extends StatelessWidget {
+class TripDetailScreen extends StatefulWidget {
   const TripDetailScreen({super.key, required this.ride});
   final Ride ride;
 
   @override
+  State<TripDetailScreen> createState() => _TripDetailScreenState();
+}
+
+class _TripDetailScreenState extends State<TripDetailScreen> {
+  List<LatLng> _route = const [];
+  bool _snapped = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRoute());
+  }
+
+  Future<void> _loadRoute() async {
+    final path = await context
+        .read<RouteService>()
+        .driving(widget.ride.pickup, widget.ride.drop);
+    if (!mounted) return;
+    setState(() {
+      _route = path.points;
+      _snapped = path.snapped;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final ride = widget.ride;
     return Scaffold(
       appBar: AppBarBack(title: ride.dropLabel),
       body: Column(
         children: [
           SizedBox(
-            height: 180,
+            height: 220,
             child: BrandedMap(
               interactive: false,
+              showMe: false,
+              route: _route,
+              routeSnapped: _snapped,
+              fitPoints: [ride.pickup, ride.drop],
               markers: [
                 MapMarkerData(point: ride.pickup, kind: MapPinKind.pickup),
                 MapMarkerData(point: ride.drop, kind: MapPinKind.drop),
