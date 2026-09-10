@@ -35,3 +35,13 @@ input:focus-visible {
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
 }
+
+@keyframes sos-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

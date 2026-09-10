@@ -1,28 +1,39 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet"
-import { api, store, type SosRow } from "../api/client"
+import { api } from "../api/client"
 import { DangerButton, PrimaryButton } from "../components/ui/Ui"
+import { clearSosAlertTitle, useSosPolling } from "../hooks/useSosPolling"
 import { colors } from "../styles/colors"
 import { useT } from "../i18n/LocaleProvider"
 import "leaflet/dist/leaflet.css"
 
 export function SosPage() {
   const { t } = useT()
-  const [rows, setRows] = useState<SosRow[]>([])
-
-  async function refresh() {
-    const data = await api<SosRow[]>("/admin/sos/active")
-    setRows(data)
-    store.sos = data
-  }
+  const { sos: rows, refresh } = useSosPolling()
 
   useEffect(() => {
-    void refresh()
+    clearSosAlertTitle()
+    const onWindowFocus = () => clearSosAlertTitle()
+    window.addEventListener("focus", onWindowFocus)
+    return () => window.removeEventListener("focus", onWindowFocus)
   }, [])
 
   return (
-    <div className="flex h-[calc(100svh-8rem)] flex-col gap-[16px]">
-      <h1 className="text-[22px] font-semibold">{t.sos}</h1>
+    <div
+      className="flex h-[calc(100svh-8rem)] flex-col gap-[16px]"
+      onClick={() => clearSosAlertTitle()}
+    >
+      <div className="flex items-center gap-[12px]">
+        <h1 className="text-[22px] font-semibold">{t.sos}</h1>
+        <span className="flex items-center gap-[6px] text-[12px] text-[var(--text-secondary)]">
+          <span
+            className="h-[8px] w-[8px] rounded-full bg-[var(--success)]"
+            style={{ animation: "sos-live-pulse 1.5s ease-in-out infinite" }}
+            aria-hidden
+          />
+          {t.live}
+        </span>
+      </div>
       {rows.length === 0 ? (
         <p className="text-[16px] text-[var(--text-secondary)]">{t.noSos}</p>
       ) : (

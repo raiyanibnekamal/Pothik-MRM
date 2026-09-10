@@ -1,11 +1,12 @@
 import { useNavigate } from "react-router-dom"
-import { store } from "../../api/client"
+import { useSosPolling } from "../../hooks/useSosPolling"
 import { useT } from "../../i18n/LocaleProvider"
 
 export function SosBanner() {
   const { t } = useT()
   const nav = useNavigate()
-  const n = store.sos.length
+  const { sos } = useSosPolling()
+  const n = sos.length
   if (n === 0) return null
   return (
     <button
