@@ -11,7 +11,7 @@ export function SosPage() {
   const [rows, setRows] = useState<SosRow[]>([])
 
   async function refresh() {
-    const data = await api<SosRow[]>("/admin/sos")
+    const data = await api<SosRow[]>("/admin/sos/active")
     setRows(data)
     store.sos = data
   }
