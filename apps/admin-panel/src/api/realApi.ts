@@ -18,7 +18,6 @@ export function mapPath(
     return { url: "/auth/admin/login", method: "POST", body: json }
   }
   if (path === "/admin/dashboard-stats") return { url: "/admin/dashboard", method: "GET" }
-  if (path === "/admin/sos") return { url: "/admin/sos/active", method: "GET" }
   if (path.match(/^\/admin\/drivers\/[^/]+\/approve$/)) {
     const id = path.split("/")[3]
     return { url: `/admin/kyc/${id}/approve`, method: "POST" }
@@ -97,7 +96,7 @@ export function transformResponse<T>(path: string, data: unknown): T {
     return rows.map(mapRide) as T
   }
 
-  if (path === "/admin/sos") {
+  if (path === "/admin/sos/active") {
     const rows = data as Record<string, unknown>[]
     return (Array.isArray(rows) ? rows : []).map(mapSos) as T
   }

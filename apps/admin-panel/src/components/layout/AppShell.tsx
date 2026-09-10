@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import {
   LayoutDashboard,
@@ -12,8 +11,9 @@ import {
   Settings,
 } from "lucide-react"
 import { useT } from "../../i18n/LocaleProvider"
-import { api, envName, refreshSosStore, store } from "../../api/client"
+import { api, envName } from "../../api/client"
 import { SosBanner } from "../sos/SosBanner"
+import { useSosPolling } from "../../hooks/useSosPolling"
 
 const links = [
   { to: "/", key: "dashboard" as const, icon: LayoutDashboard },
@@ -30,17 +30,8 @@ const links = [
 export function AppShell() {
   const { t, locale, setLocale } = useT()
   const nav = useNavigate()
-  const [sosCount, setSosCount] = useState(store.sos.length)
-
-  useEffect(() => {
-    async function poll() {
-      await refreshSosStore()
-      setSosCount(store.sos.length)
-    }
-    void poll()
-    const id = window.setInterval(() => void poll(), 15000)
-    return () => window.clearInterval(id)
-  }, [])
+  const { sos } = useSosPolling()
+  const sosCount = sos.length
 
   async function logout() {
     await api("/auth/logout", { method: "POST" })

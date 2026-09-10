@@ -132,6 +132,13 @@ class SosService
     private function notifyGuardians(User $user, SosAlert $alert, ?Ride $ride): void
     {
         $contacts = EmergencyContact::where('user_id', $user->id)->get();
+
+        if ($contacts->isEmpty()) {
+            $alert->update(['sms_status' => 'skipped']);
+
+            return;
+        }
+
         $trackUrl = $ride && $ride->track_token
             ? url("/public/track/{$ride->track_token}")
             : url('/');
@@ -158,6 +165,6 @@ class SosService
             }
         }
 
-        $alert->update(['sms_status' => $allSent ? 'sent' : ($contacts->isEmpty() ? 'failed' : 'failed')]);
+        $alert->update(['sms_status' => $allSent ? 'sent' : 'failed']);
     }
 }

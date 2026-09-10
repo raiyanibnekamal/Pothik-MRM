@@ -327,7 +327,7 @@ async function mock(path: string, json: unknown, method: string) {
     return envelope(u).data
   }
   if (path === "/admin/rides") return envelope(store.rides).data
-  if (path === "/admin/sos") return envelope(store.sos).data
+  if (path === "/admin/sos/active") return envelope(store.sos).data
   if (path.includes("/sos/") && path.endsWith("/resolve")) {
     const id = path.split("/")[3]
     store.sos = store.sos.filter((s) => s.id !== id)
@@ -354,7 +354,7 @@ export function envName() {
 export async function refreshSosStore() {
   if (useMock) return
   try {
-    store.sos = await api<SosRow[]>("/admin/sos")
+    store.sos = await api<SosRow[]>("/admin/sos/active")
   } catch {
     /* ignore poll errors */
   }
