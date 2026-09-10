@@ -231,6 +231,50 @@ class S {
   String get navServices => isBn ? 'সার্ভিস' : 'Services';
   String get navActivity => isBn ? 'অ্যাক্টিভিটি' : 'Activity';
   String get navAccount => isBn ? 'অ্যাকাউন্ট' : 'Account';
+  String get navEarnings => isBn ? 'আয়' : 'Earnings';
+  String get driverWelcomeTitle =>
+      isBn ? 'ড্রাইভার হিসেবে স্বাগতম' : 'Welcome, driver partner';
+  String get driverWelcomeBody => isBn
+      ? 'অনলাইন যান, রাইড গ্রহণ করুন, নিরাপদে ট্রিপ শেষ করুন।'
+      : 'Go online, accept rides, and complete trips safely.';
+  String get driverWelcomeGo => isBn ? 'শুরু করি' : "Let's go";
+  String driverTodayChip(String amount) =>
+      isBn ? 'আজ $amount' : 'Today $amount';
+  String get driverEarningsSubtitle => isBn
+      ? 'আজকের আয় ও কমিশন এক নজরে'
+      : "Today's earnings and commission at a glance";
+  String get driverTipsTitle => isBn ? 'টিপস' : 'Tips';
+  String get driverTip1 => isBn
+      ? 'অনলাইন থাকলে কাছাকাছি রিকোয়েস্ট দ্রুত আসে।'
+      : 'Stay online to receive nearby requests faster.';
+  String get driverTip2 => isBn
+      ? 'PIN যাচাই ছাড়া ট্রিপ শুরু করবেন না।'
+      : 'Never start a trip without verifying the rider PIN.';
+  String get driverTip3 => isBn
+      ? 'ক্যাশ পেয়েছি নিশ্চিত করার পরই পরবর্তী রাইড নিন।'
+      : 'Confirm cash before taking the next ride.';
+  String get driverActivitySubtitle => isBn
+      ? 'সম্পন্ন ট্রিপের হিস্টরি'
+      : 'Your completed trip history';
+  String get driverEmptyActivity => isBn
+      ? 'অনলাইন গিয়ে প্রথম ট্রিপ সম্পন্ন করুন।'
+      : 'Go online and complete your first trip.';
+  String get driverVehicleSection => isBn ? 'আপনার গাড়ি' : 'Your vehicle';
+  String get driverKycApproved => isBn ? 'KYC অনুমোদিত' : 'KYC approved';
+  String get driverKycPending => isBn ? 'KYC রিভিউ চলছে' : 'KYC under review';
+  String get driverKycGrace => isBn ? '২৪ ঘণ্টা গ্রেস পিরিয়ড' : '24h grace period';
+  String get driverSupport => isBn
+      ? 'সাপোর্ট: support@bdride.share · ০১৫২১৭০০০৪'
+      : 'Support: support@bdride.share · 0152170004';
+  String get driverBatteryHint => isBn
+      ? 'ব্যাকগ্রাউন্ড GPS কম ব্যবহার করে'
+      : 'Uses less background GPS';
+  String get driverEndBreak => isBn ? 'বিরতি শেষ' : 'End break';
+  String get driverHeadingPickup =>
+      isBn ? 'পিকআপের দিকে যান' : 'Head to pickup';
+  String get driverHeadingDrop =>
+      isBn ? 'ড্রপ-অফের দিকে যান' : 'Head to drop-off';
+  String get pickupShort => isBn ? 'পিকআপ' : 'Pickup';
   String get forYou => isBn ? 'আপনার জন্য' : 'For you';
   String get later => isBn ? 'পরে' : 'Later';
   String get trip => isBn ? 'ট্রিপ' : 'Trip';

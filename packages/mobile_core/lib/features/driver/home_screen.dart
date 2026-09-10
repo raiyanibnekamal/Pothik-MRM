@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:mobile_core/core/driver/driver_session_cubit.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
 import 'package:mobile_core/core/models/models.dart';
@@ -9,24 +8,33 @@ import 'package:mobile_core/core/session/session_cubit.dart';
 import 'package:mobile_core/core/sos/sos_cubit.dart';
 import 'package:mobile_core/core/theme/app_colors.dart';
 import 'package:mobile_core/core/theme/app_radius.dart';
+import 'package:mobile_core/core/theme/app_shadows.dart';
 import 'package:mobile_core/core/theme/app_text.dart';
 import 'package:mobile_core/core/widgets/app_button.dart';
 import 'package:mobile_core/core/widgets/app_chrome.dart';
 import 'package:mobile_core/core/widgets/app_fields.dart';
 import 'package:mobile_core/core/widgets/branded_map.dart';
+import 'package:mobile_core/core/widgets/pressable.dart';
 import 'package:mobile_core/core/widgets/sos_widgets.dart';
 import 'package:mobile_core/features/shared/rating_sheet.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class DriverHomeScreen extends StatelessWidget {
-  const DriverHomeScreen({super.key});
+/// Map-first driver home: status, earnings chip, online toggle, trip flow.
+class DriverHomeTab extends StatelessWidget {
+  const DriverHomeTab({super.key, this.onOpenEarnings});
+
+  final VoidCallback? onOpenEarnings;
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final user = context.watch<SessionCubit>().state.user;
     final ds = context.watch<DriverSessionCubit>().state;
+    final earnings = ds.earnings ?? context.read<DriverSessionCubit>().backend.earnings();
+    final immersive = ds.phase != DriverTripPhase.idle;
+    final bottomInset = immersive ? 16.0 : 96.0;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -34,34 +42,49 @@ class DriverHomeScreen extends StatelessWidget {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.interactivePrimary,
-                      borderRadius: AppRadius.mdAll,
-                    ),
-                    child: StatusDot(
-                      online: ds.online && !ds.onBreak,
-                      label: ds.onBreak
-                          ? s.onBreak
-                          : ds.online
-                              ? s.online
-                              : s.offlineStatus,
-                    ),
-                  ),
-                  const Spacer(),
-                  _iconBtn(
-                    PhosphorIconsBold.wallet,
-                    s.earnings,
-                    () => context.push('/driver/earnings'),
-                  ),
-                  const SizedBox(width: 8),
-                  _iconBtn(
-                    PhosphorIconsBold.user,
-                    s.profile,
-                    () => context.push('/driver/profile'),
+                  Row(
+                    children: [
+                      _StatusBadge(
+                        online: ds.online && !ds.onBreak,
+                        onBreak: ds.onBreak,
+                      ),
+                      const Spacer(),
+                      if (onOpenEarnings != null)
+                        Pressable(
+                          onTap: onOpenEarnings,
+                          borderRadius: AppRadius.mdAll,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: AppRadius.mdAll,
+                              boxShadow: AppShadows.sm,
+                              border: Border.all(color: AppColors.borderDefault),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  PhosphorIconsFill.wallet,
+                                  size: 16,
+                                  color: AppColors.navy900,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  s.driverTodayChip(formatTaka(earnings.net)),
+                                  style: AppText.label(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -70,30 +93,49 @@ class DriverHomeScreen extends StatelessWidget {
           if (ds.phase == DriverTripPhase.request && ds.request != null)
             Align(
               alignment: Alignment.bottomCenter,
-              child: SafeArea(child: _RequestCard(request: ds.request!)),
+              child: SafeArea(
+                minimum: EdgeInsets.only(bottom: bottomInset),
+                child: _RequestCard(request: ds.request!),
+              ),
             )
           else if (ds.phase != DriverTripPhase.idle)
             Align(
               alignment: Alignment.bottomCenter,
-              child: SafeArea(child: _TripCard(state: ds)),
+              child: SafeArea(
+                minimum: EdgeInsets.only(bottom: bottomInset),
+                child: _TripCard(state: ds),
+              ),
             )
           else
             Align(
               alignment: Alignment.bottomCenter,
               child: SafeArea(
+                minimum: EdgeInsets.only(bottom: bottomInset),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (user?.commissionDebtBdt != null &&
-                          (user!.commissionDebtBdt > 0))
+                          user!.commissionDebtBdt > 0)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: AppCard(
-                            child: Text(
-                              '${s.debtWarning}: ${formatTaka(user.commissionDebtBdt)}',
-                              style: AppText.label(AppColors.warning),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  PhosphorIconsFill.warning,
+                                  color: AppColors.warning,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '${s.debtWarning}: ${formatTaka(user.commissionDebtBdt)}',
+                                    style: AppText.label(AppColors.warning),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -121,28 +163,30 @@ class DriverHomeScreen extends StatelessWidget {
                           if (err != null && context.mounted) {
                             showAppSnack(
                               context,
-                              err == 'DEBT_CAP' ? s.debtCap : s.graceOver,
+                              err == ErrorCodes.debtCap ? s.debtCap : s.graceOver,
                               error: true,
                             );
                           }
                         },
                       ),
-                      if (ds.online)
+                      if (ds.online) ...[
+                        const SizedBox(height: 8),
                         AppButton(
-                          label: s.onBreak,
+                          label: ds.onBreak ? s.driverEndBreak : s.onBreak,
                           variant: AppButtonVariant.text,
                           onPressed: () =>
                               context.read<DriverSessionCubit>().toggleBreak(),
                         ),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
-          if (ds.online)
+          if (ds.online && ds.phase == DriverTripPhase.idle)
             Positioned(
               right: 16,
-              bottom: 120,
+              bottom: bottomInset + 88,
               child: SosHoldFab(
                 label: s.sos,
                 onConfirmed: () async {
@@ -157,19 +201,47 @@ class DriverHomeScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _iconBtn(IconData icon, String label, VoidCallback onTap) {
-    return Material(
-      color: AppColors.surface,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(icon, color: AppColors.navy900, size: 20),
-        ),
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.online, required this.onBreak});
+
+  final bool online;
+  final bool onBreak;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final label = onBreak
+        ? s.onBreak
+        : online
+            ? s.online
+            : s.offlineStatus;
+    final color = onBreak
+        ? AppColors.warning
+        : online
+            ? AppColors.interactivePrimary
+            : AppColors.textSecondary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.mdAll,
+        boxShadow: AppShadows.sm,
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Text(label, style: AppText.caption(color)),
+        ],
       ),
     );
   }
@@ -184,12 +256,13 @@ class _RequestCard extends StatelessWidget {
     final s = S.of(context);
     final ds = context.watch<DriverSessionCubit>().state;
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.sheetTop,
         border: Border.all(color: AppColors.borderDefault),
+        boxShadow: AppShadows.sm,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -241,20 +314,25 @@ class _TripCard extends StatelessWidget {
     final s = S.of(context);
     final cubit = context.read<DriverSessionCubit>();
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.mdAll,
         border: Border.all(color: AppColors.borderDefault),
+        boxShadow: AppShadows.sm,
       ),
       child: switch (state.phase) {
         DriverTripPhase.toPickup => Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(s.driverHeadingPickup, style: AppText.subhead()),
+              const SizedBox(height: 12),
               AppButton(
                 label: s.navPickup,
                 variant: AppButtonVariant.secondary,
+                height: 52,
                 onPressed: () => launchUrl(
                   Uri.parse(
                     'https://www.google.com/maps/dir/?api=1&destination=23.7925,90.4078&travelmode=driving',
@@ -262,7 +340,7 @@ class _TripCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              AppButton(label: s.arrived, onPressed: cubit.arrived),
+              AppButton(label: s.arrived, height: 52, onPressed: cubit.arrived),
             ],
           ),
         DriverTripPhase.arrived => Column(
@@ -270,7 +348,7 @@ class _TripCard extends StatelessWidget {
             children: [
               Text(s.waitNoShow, style: AppText.subhead()),
               const SizedBox(height: 12),
-              AppButton(label: s.enterPin, onPressed: cubit.openPin),
+              AppButton(label: s.enterPin, height: 52, onPressed: cubit.openPin),
               AppButton(
                 label: s.noShow,
                 variant: AppButtonVariant.text,
@@ -282,6 +360,8 @@ class _TripCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(s.enterPin, style: AppText.title()),
+              const SizedBox(height: 8),
+              Text(s.firstTripPin, style: AppText.helper(), textAlign: TextAlign.center),
               const SizedBox(height: 16),
               CodeBoxes(
                 length: 4,
@@ -293,6 +373,7 @@ class _TripCard extends StatelessWidget {
               const SizedBox(height: 16),
               AppButton(
                 label: s.startTrip,
+                height: 52,
                 onPressed: state.pin.length == 4
                     ? () {
                         if (!cubit.submitPin()) {
@@ -306,10 +387,14 @@ class _TripCard extends StatelessWidget {
           ),
         DriverTripPhase.toDrop => Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(s.driverHeadingDrop, style: AppText.subhead()),
+              const SizedBox(height: 12),
               AppButton(
                 label: s.navDrop,
                 variant: AppButtonVariant.secondary,
+                height: 52,
                 onPressed: () => launchUrl(
                   Uri.parse(
                     'https://www.google.com/maps/dir/?api=1&destination=23.7806,90.4193&travelmode=driving',
@@ -317,7 +402,11 @@ class _TripCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              AppButton(label: s.completeTrip, onPressed: cubit.openCash),
+              AppButton(
+                label: s.completeTrip,
+                height: 52,
+                onPressed: cubit.openCash,
+              ),
             ],
           ),
         DriverTripPhase.cash => Column(
@@ -336,6 +425,7 @@ class _TripCard extends StatelessWidget {
               const SizedBox(height: 16),
               AppButton(
                 label: s.cashReceived,
+                height: 52,
                 loading: state.busy,
                 onPressed: cubit.confirmCash,
               ),
@@ -348,6 +438,7 @@ class _TripCard extends StatelessWidget {
               const SizedBox(height: 12),
               AppButton(
                 label: s.submit,
+                height: 52,
                 onPressed: () async {
                   await showRatingSheet(
                     context,
@@ -362,97 +453,6 @@ class _TripCard extends StatelessWidget {
           ),
         _ => const SizedBox.shrink(),
       },
-    );
-  }
-}
-
-class DriverEarningsScreen extends StatelessWidget {
-  const DriverEarningsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = S.of(context);
-    final e = context.watch<DriverSessionCubit>().backend.earnings();
-    return Scaffold(
-      appBar: AppBarBack(title: s.earnings),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(s.today, style: AppText.helper()),
-                  Text(formatTaka(e.net), style: AppText.heroNumber()),
-                  const SizedBox(height: 16),
-                  _row(s.gross, formatTaka(e.gross)),
-                  _row(s.commission, formatTaka(e.commission)),
-                  _row(s.net, formatTaka(e.net)),
-                  _row(s.trips, '${e.trips}'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            AppCard(
-              child: Text(
-                '${s.debtWarning}: ${formatTaka(e.debt)}',
-                style: AppText.label(
-                  e.debt > 0 ? AppColors.warning : AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String k, String v) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            Expanded(child: Text(k, style: AppText.helper())),
-            Text(v, style: AppText.fare()),
-          ],
-        ),
-      );
-}
-
-class DriverProfileScreen extends StatelessWidget {
-  const DriverProfileScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = S.of(context);
-    final saver = context.watch<DriverSessionCubit>().state.batterySaver;
-    return Scaffold(
-      appBar: AppBarBack(title: s.profile),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          SwitchListTile(
-            title: Text(s.batterySaver, style: AppText.label()),
-            value: saver,
-            activeThumbColor: AppColors.navy900,
-            onChanged: (v) =>
-                context.read<DriverSessionCubit>().setBatterySaver(v),
-          ),
-          ListTile(
-            title: Text(s.language, style: AppText.label()),
-            trailing: Text(s.isBn ? s.bangla : s.english, style: AppText.helper()),
-            onTap: () => context.read<LocaleCubit>().toggle(),
-          ),
-          ListTile(
-            title: Text(s.documentsTitle, style: AppText.label()),
-            onTap: () {},
-          ),
-          ListTile(
-            title: Text(s.logout, style: AppText.label(AppColors.danger)),
-            onTap: () => context.read<SessionCubit>().logout(),
-          ),
-        ],
-      ),
     );
   }
 }

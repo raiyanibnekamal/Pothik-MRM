@@ -219,6 +219,12 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
   }
 
   void finishTrip() {
+    if (state.cashDone && state.rideId != null && state.fareBdt > 0) {
+      backend.recordDriverTrip(
+        rideId: state.rideId!,
+        fareBdt: state.fareBdt,
+      );
+    }
     emit(state.copyWith(
       phase: DriverTripPhase.idle,
       cashDone: false,

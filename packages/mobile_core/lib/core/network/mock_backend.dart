@@ -326,6 +326,31 @@ class MockBackend {
     return openRequest!;
   }
 
+  void recordDriverTrip({required String rideId, required int fareBdt, String dropArea = 'Banani'}) {
+    history.insert(
+      0,
+      Ride(
+        id: rideId,
+        status: RideStatus.completed,
+        pickup: const LatLng(23.7925, 90.4078),
+        drop: const LatLng(23.7937, 90.4066),
+        pickupLabel: 'Gulshan 2',
+        dropLabel: dropArea,
+        vehicleType: bike,
+        paymentMethod: 'CASH',
+        pin: '4821',
+        fare: FareBreakdown(
+          base: 30,
+          distance: fareBdt ~/ 3,
+          time: fareBdt ~/ 5,
+          minFare: 50,
+          total: fareBdt,
+        ),
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
   EarningsToday earnings() {
     final qa = sessionUser != null && BdPhone.isQa(sessionUser!.phone);
     return EarningsToday(

@@ -10,7 +10,7 @@ import 'package:mobile_core/features/auth/permission_primer_screen.dart';
 import 'package:mobile_core/features/auth/phone_screen.dart';
 import 'package:mobile_core/features/auth/profile_setup_screen.dart';
 import 'package:mobile_core/features/auth/splash_screen.dart';
-import 'package:mobile_core/features/driver/home_screen.dart';
+import 'package:mobile_core/features/driver/driver_shell_screens.dart';
 import 'package:mobile_core/features/driver/onboarding_screens.dart';
 import 'package:mobile_core/features/passenger/finding_history.dart';
 import 'package:mobile_core/features/passenger/home_screen.dart';
@@ -113,7 +113,7 @@ GoRouter createRouter({
       GoRoute(path: '/driver/documents', builder: (_, _) => const DriverDocumentsScreen()),
       GoRoute(path: '/driver/pending', builder: (_, _) => const DriverPendingScreen()),
       GoRoute(path: '/driver/rejected', builder: (_, _) => const DriverRejectedScreen()),
-      GoRoute(path: '/driver/home', builder: (_, _) => const DriverHomeScreen()),
+      GoRoute(path: '/driver/home', builder: (_, _) => const DriverShell()),
       GoRoute(path: '/driver/earnings', builder: (_, _) => const DriverEarningsScreen()),
       GoRoute(path: '/driver/profile', builder: (_, _) => const DriverProfileScreen()),
     ],
