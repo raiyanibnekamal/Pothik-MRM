@@ -1,0 +1,25 @@
+# Lock main: only owner pushes/merges. Run once after adding secret GH_ADMIN_TOKEN.
+# Create token: GitHub → Settings → Developer settings → PAT → repo → Administration: Read and write
+# Repo secret: Settings → Secrets → Actions → GH_ADMIN_TOKEN
+name: Enable Main Branch Protection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  protect-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply branch protection to main
+        env:
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Missing secret GH_ADMIN_TOKEN. See docs/BRANCH_PROTECTION.md"
+            exit 1
+          fi
+          gh api --method PUT \
+            repos/raiyanibnekamal/Pothik-MRM/branches/main/protection \
+            --input scripts/branch-protection-main.json

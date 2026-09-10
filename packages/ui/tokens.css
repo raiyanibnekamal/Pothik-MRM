@@ -1,0 +1,82 @@
+/* BD Ride Share design tokens — the only hex source for admin CSS. */
+:root {
+  --navy-50: #eef1f6;
+  --navy-100: #d6dce8;
+  --navy-200: #aebbd1;
+  --navy-300: #8698b9;
+  --navy-400: #5e75a1;
+  --navy-500: #3b5389;
+  --navy-600: #24406f;
+  --navy-700: #1b325a;
+  --navy-800: #172946;
+  --navy-900: #14213d;
+  --navy-950: #0d1729;
+
+  --amber-50: #fef6e9;
+  --amber-100: #fce7c2;
+  --amber-200: #f9d28e;
+  --amber-300: #f6bd5a;
+  --amber-400: #f4b646;
+  --amber-500: #f2a93c;
+  --amber-600: #d6902b;
+  --amber-700: #b37423;
+  --amber-800: #8f5c1c;
+  --amber-900: #6b4515;
+  --amber-950: #4c3110;
+
+  --gray-50: #f7f7f5;
+  --gray-100: #efefec;
+  --gray-200: #e3e5e8;
+  --gray-300: #c7cbd1;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5262;
+  --gray-700: #363b47;
+  --gray-800: #23262e;
+  --gray-900: #16181d;
+  --gray-950: #0e0f13;
+
+  --bg: var(--gray-50);
+  --surface: #ffffff;
+  --border-default: var(--gray-200);
+  --border-strong: var(--gray-300);
+  --text-primary: var(--gray-900);
+  --text-secondary: var(--gray-500);
+  --text-disabled: var(--gray-400);
+  --text-on-primary: #ffffff;
+  --text-on-accent: var(--navy-900);
+  --interactive-primary: var(--navy-900);
+  --interactive-primary-hover: var(--navy-700);
+  --interactive-primary-pressed: var(--navy-950);
+  --interactive-accent: var(--amber-500);
+  --interactive-accent-hover: var(--amber-400);
+  --interactive-accent-pressed: var(--amber-600);
+  --interactive-disabled-bg: var(--gray-100);
+  --interactive-disabled-text: var(--gray-400);
+  --focus-ring: color-mix(in srgb, var(--navy-500) 40%, transparent);
+  --success: #1e8a5f;
+  --success-bg: #e7f5ee;
+  --danger: #d64545;
+  --danger-bg: #fbeaea;
+  --warning: #c97a1e;
+  --warning-bg: #fbf0e2;
+
+  --shadow-sm: 0 2px 8px rgba(20, 33, 61, 0.1);
+  --shadow-md: 0 8px 24px rgba(20, 33, 61, 0.16);
+  --shadow-fab: 0 4px 12px rgba(214, 69, 69, 0.35);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-sheet: 20px;
+
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+
+  --font-ui: "Hind Siliguri", sans-serif;
+  --font-numeric: "Inter", sans-serif;
+}

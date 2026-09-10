@@ -1,0 +1,10 @@
+# BD Ride Share — code owners (auto-request review on PRs)
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+*                                           @raiyanibnekamal
+/apps/api/                                  @raiyanibnekamal
+/infra/                                     @raiyanibnekamal
+/packages/shared-types/                     @raiyanibnekamal
+/packages/shared-constants/                 @raiyanibnekamal
+/docs/PRD.md                                @raiyanibnekamal
+/docs/ARCHITECTURE.md                       @raiyanibnekamal

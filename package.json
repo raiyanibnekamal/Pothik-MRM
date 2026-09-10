@@ -1,0 +1,11 @@
+{
+  "name": "bd-ride-share",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev:admin": "pnpm --filter admin-panel dev",
+    "build:admin": "pnpm --filter admin-panel build",
+    "lint:admin": "pnpm --filter admin-panel lint",
+    "test:e2e": "pnpm --filter @bd-ride-share/e2e test"
+  }
+}

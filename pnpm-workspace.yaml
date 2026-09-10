@@ -1,0 +1,6 @@
+packages:
+  - "apps/admin-panel"
+  - "packages/ui"
+  - "packages/shared-types"
+  - "packages/shared-constants"
+  - "test/e2e"
