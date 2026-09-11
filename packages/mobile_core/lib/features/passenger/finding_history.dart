@@ -109,49 +109,82 @@ class FindingDriverScreen extends StatelessWidget {
   }
 }
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
+
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshHistory());
+  }
+
+  Future<void> _refreshHistory() async {
+    final cubit = context.read<RideCubit>();
+    final backend = cubit.backend;
+    try {
+      await backend.refreshHistory();
+    } on Object {
+      // Mock backend has no refreshHistory(); history stays as-is.
+    }
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    final items = context.read<RideCubit>().backend.history;
+    final items = context.watch<RideCubit>().backend.history;
     return Scaffold(
       appBar: AppBarBack(title: s.history),
-      body: items.isEmpty
-          ? EmptyState(
-              title: s.emptyHistory,
-              body: s.recents,
-              cta: s.emptyHistoryCta,
-              onCta: () => context.go('/passenger/home'),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, i) {
-                final r = items[i];
-                return AppCard(
-                  child: InkWell(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TripDetailScreen(ride: r),
+      body: RefreshIndicator(
+        onRefresh: _refreshHistory,
+        child: items.isEmpty
+            ? ListView(
+                children: [
+                  const SizedBox(height: 80),
+                  EmptyState(
+                    title: s.emptyHistory,
+                    body: s.recents,
+                    cta: s.emptyHistoryCta,
+                    onCta: () => context.go('/passenger/home'),
+                  ),
+                ],
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, i) {
+                  final r = items[i];
+                  return AppCard(
+                    child: InkWell(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TripDetailScreen(ride: r),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(r.dropLabel, style: AppText.label()),
+                          const SizedBox(height: 4),
+                          Text(formatTaka(r.fare.total), style: AppText.fare()),
+                          Text(
+                            r.vehicleType.label(s.isBn),
+                            style: AppText.helper(),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(r.dropLabel, style: AppText.label()),
-                        const SizedBox(height: 4),
-                        Text(formatTaka(r.fare.total), style: AppText.fare()),
-                        Text(r.vehicleType.label(s.isBn), style: AppText.helper()),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }

@@ -1,0 +1,102 @@
+# Pothik MRM — staging deploy.
+#
+# Triggers:
+#   - push to `staging` branch deploys the latest commit
+#   - workflow_dispatch lets ops re-deploy a pinned ref
+#
+# Required secrets (Settings → Secrets → Actions):
+#   STAGING_SSH_KEY    private key matching the deploy user on the VPS
+#   STAGING_VPS_HOST   DNS A-record hostname, e.g. staging.pothik.example.com
+#   STAGING_VPS_USER   deploy user (must be in `docker` group)
+#
+# Required environment:
+#   Github `staging` environment restricts who can approve.
+
+name: deploy-staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "git ref to deploy (branch / sha / tag)"
+        required: false
+        default: ""
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: "Deploy to staging"
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Add VPS host key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_VPS_HOST }} $(ssh-keyscan -H ${{ secrets.STAGING_VPS_HOST }} 2>/dev/null)" >> ~/.ssh/known_hosts
+
+      - name: rsync infra + api (no vendor, no node_modules)
+        run: |
+          rsync -az --delete \
+            --exclude='vendor' --exclude='node_modules' --exclude='storage/logs/*' \
+            --exclude='.git' --exclude='tests' --exclude='phpunit.xml' \
+            ./infra ./apps/api \
+            ${{ secrets.STAGING_VPS_USER }}@${{ secrets.STAGING_VPS_HOST }}:/opt/pothik/
+
+      - name: Build + restart compose stack
+        run: |
+          ssh ${{ secrets.STAGING_VPS_USER }}@${{ secrets.STAGING_VPS_HOST }} "
+            cd /opt/pothik/infra/docker &&
+            docker compose -f docker-compose.prod.yml --env-file /opt/pothik/.env.production build api worker scheduler reverb &&
+            docker compose -f docker-compose.prod.yml --env-file /opt/pothik/.env.production up -d --no-deps api worker scheduler reverb
+          "
+
+      - name: Migrate (forward-only, idempotent)
+        run: |
+          ssh ${{ secrets.STAGING_VPS_USER }}@${{ secrets.STAGING_VPS_HOST }} "
+            cd /opt/pothik && docker compose -f infra/docker/docker-compose.prod.yml \
+              exec -T api php artisan migrate --force
+          "
+
+      - name: Wait for /api/v1/health (max 90s)
+        run: |
+          for i in $(seq 1 18); do
+            code=$(curl -sk -o /dev/null -w '%{http_code}' https://${{ secrets.STAGING_VPS_HOST }}/api/v1/health || echo 000)
+            echo "attempt $i -> $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::health check failed after 90s"
+          exit 1
+
+      - name: Verify Reverb WSS handshake
+        run: |
+          # 426 (Upgrade Required) is the correct response from a healthy WS
+          # server to a plain HTTP probe. Anything else means Caddy failed
+          # to forward to the reverb container.
+          code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 https://ws.${{ secrets.STAGING_VPS_HOST }}/ || echo 000)
+          if [ "$code" != "426" ] && [ "$code" != "200" ]; then
+            echo "::error::Reverb not reachable (got $code, expected 426)"
+            exit 1
+          fi
+
+      - name: Tail recent logs on failure
+        if: failure()
+        run: |
+          ssh ${{ secrets.STAGING_VPS_USER }}@${{ secrets.STAGING_VPS_HOST }} "
+            docker compose -f /opt/pothik/infra/docker/docker-compose.prod.yml logs --tail=200 api worker scheduler reverb caddy | tail -300
+          "

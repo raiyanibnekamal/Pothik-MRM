@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Events\AdminSosAlert;
+use App\Events\RideDispatched;
+use App\Listeners\SendAdminSosPushNotification;
+use App\Listeners\SendDriverRidePushNotification;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
@@ -17,6 +21,18 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         Registered::class => [
             SendEmailVerificationNotification::class,
+        ],
+
+        // S2.4 / S4.2 — driver push on dispatched ride.
+        // Queue-safe; the NullFcmService logs in local/testing and the
+        // socket is the source of truth, so dispatch latency is unaffected.
+        RideDispatched::class => [
+            SendDriverRidePushNotification::class,
+        ],
+
+        // S4.2 — admin push when SOS is triggered.
+        AdminSosAlert::class => [
+            SendAdminSosPushNotification::class,
         ],
     ];
 

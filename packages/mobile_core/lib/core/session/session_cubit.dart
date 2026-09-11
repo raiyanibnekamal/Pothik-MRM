@@ -77,7 +77,11 @@ class SessionCubit extends Cubit<SessionState> {
       } else {
         backend.sessionUser = user;
       }
+      // S0.4 — Also restore the refresh token so the auth interceptor can
+      // silently rotate the access token after it expires (16+ min later)
+      // without forcing the user back to the OTP screen.
       backend.access = access;
+      backend.refresh = await store.refresh;
       emit(SessionState(booting: false, user: user));
       return;
     }
@@ -144,6 +148,10 @@ class SessionCubit extends Cubit<SessionState> {
     await store.clearTokens();
     backend.sessionUser = null;
     backend.activeRide = null;
+    // S0.4 — Drop in-memory tokens too so a relaunch after logout can't
+    // accidentally rehydrate a stale refresh from disk.
+    backend.access = null;
+    backend.refresh = null;
     emit(const SessionState(booting: false));
   }
 }

@@ -1,0 +1,17 @@
+#!/bin/sh
+# PHP-FPM healthcheck — exits 0 only if the master process is listening.
+# Used by `HEALTHCHECK CMD` in Dockerfile.prod so docker compose can mark
+# the api service unhealthy instead of crashing silently.
+#
+# Falls back to pgrep if /proc/net/tcp is not readable.
+set -e
+
+if command -v cgi-fcgi >/dev/null 2>&1; then
+    cgi-fcgi -bind -connect 127.0.0.1:9000 -c /dev/null 2>/dev/null && exit 0
+fi
+
+if pgrep -f "php-fpm: master process" >/dev/null 2>&1; then
+    exit 0
+fi
+
+exit 1

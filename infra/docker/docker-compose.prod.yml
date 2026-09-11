@@ -1,0 +1,203 @@
+# Pothik MRM — production docker-compose.
+#
+# Scope: single-host staging deploy on a $5-10 VPS (Dhaka-region recommended).
+# What this does NOT do: multi-AZ failover, blue/green, autoscaling — out of
+# scope for S6 beta launch.
+#
+# Hard rules (from docs/report.md S6.1):
+#   - APP_DEBUG=false
+#   - No `php artisan serve` anywhere; php-fpm + caddy only
+#   - No bind mounts; named volumes only
+#   - Secrets via env file (NOT committed), one per service
+#   - Healthchecks on every long-running service
+#
+# First-boot:
+#   1. Copy infra/docker/.env.production.example to a safe location, fill in
+#      SSL Wireless creds, FCM service-account JSON, JWT secret, MySQL root pw.
+#   2. `docker compose -f infra/docker/docker-compose.prod.yml --env-file \
+#       /path/to/.env.production up -d`
+#   3. `docker compose exec api php artisan migrate --force`
+#   4. Caddy auto-provisions Let's Encrypt certs on first request — verify with
+#      `docker compose logs caddy | grep -i cert`.
+#
+# Verification:
+#   curl -fsS https://api.staging.pothik.example.com/api/v1/health
+
+name: pothik-prod
+
+services:
+
+  # ---- PHP 8.2-FPM API ----
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile.prod
+    image: pothik-api:prod
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      BROADCAST_DRIVER: reverb
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      DB_HOST: mysql
+      REDIS_HOST: redis
+      REVERB_HOST: 0.0.0.0          # bound to ws container, see below
+      REVERB_PORT: 8080
+    volumes:
+      - api_storage:/var/www/html/storage
+      - api_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+    networks:
+      - backend
+    # No exposed port — Caddy reaches php-fpm through the overlay network.
+
+  # ---- Queue worker (Laravel jobs: broadcast listeners, FCM push, etc.) ----
+  worker:
+    image: pothik-api:prod
+    restart: unless-stopped
+    env_file: .env.production
+    command: >
+      sh -c "php artisan config:cache &&
+             php artisan route:cache &&
+             php artisan event:cache &&
+             php artisan queue:work --sleep=3 --tries=3 --max-time=3600"
+    volumes:
+      - api_storage:/var/www/html/storage
+      - api_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - backend
+
+  # ---- Scheduler (single instance; ride timeouts, OTP prune, etc.) ----
+  scheduler:
+    image: pothik-api:prod
+    restart: unless-stopped
+    env_file: .env.production
+    command: >
+      sh -c "while true; do
+               php artisan schedule:run --no-interaction;
+               sleep 60;
+             done"
+    volumes:
+      - api_storage:/var/www/html/storage
+      - api_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - backend
+
+  # ---- Reverb WebSocket (Laravel's first-party WS server) ----
+  # Sits on a dedicated network so Caddy can wss:// → ws:// proxy it without
+  # exposing the raw port.
+  reverb:
+    image: pothik-api:prod
+    restart: unless-stopped
+    env_file: .env.production
+    command: >
+      sh -c "php artisan config:cache &&
+             php artisan reverb:start --host=0.0.0.0 --port=8080"
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - backend
+      - realtime
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('0.0.0.0',8080,$e,$m,1)?0:1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ---- MySQL 8 ----
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_pw
+      MYSQL_DATABASE: pothik
+      MYSQL_USER: pothik
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_pw
+    secrets:
+      - mysql_root_pw
+      - mysql_pw
+    command: --default-authentication-plugin=caching_sha2_password --innodb_flush_log_at_trx_commit=2
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - backend
+
+  # ---- Redis (cache + queue + broadcast broker for Reverb) ----
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+      - realtime
+
+  # ---- Caddy reverse proxy + auto-TLS ----
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ACME_AGREE: "true"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      reverb:
+        condition: service_healthy
+    networks:
+      - backend
+      - realtime
+
+volumes:
+  api_storage:
+  api_cache:
+  mysql_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  mysql_root_pw:
+    file: ./secrets/mysql_root_pw.txt
+  mysql_pw:
+    file: ./secrets/mysql_pw.txt
+
+networks:
+  backend:
+    driver: bridge
+  realtime:
+    driver: bridge

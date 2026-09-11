@@ -10,9 +10,31 @@ export function LiveMapPage() {
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [rides, setRides] = useState<RideRow[]>([])
 
+  // S3.2 — poll drivers + rides every 8s so the map reflects movement
+  // even before the (optional) realtime channel is wired up.
   useEffect(() => {
-    void api<Driver[]>("/admin/drivers").then(setDrivers)
-    void api<RideRow[]>("/admin/rides").then(setRides)
+    let alive = true
+    const load = async () => {
+      try {
+        const [d, r] = await Promise.all([
+          api<Driver[]>("/admin/drivers"),
+          api<RideRow[]>("/admin/rides"),
+        ])
+        if (!alive) return
+        setDrivers(d)
+        setRides(r)
+      } catch {
+        // ignore — keep last known snapshot
+      }
+    }
+    void load()
+    const id = window.setInterval(() => {
+      if (alive) void load()
+    }, 8000)
+    return () => {
+      alive = false
+      window.clearInterval(id)
+    }
   }, [])
 
   return (

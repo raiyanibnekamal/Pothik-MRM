@@ -2,7 +2,7 @@
 
 Uber-class ride-hailing platform for Bangladesh — a **pnpm + Flutter monorepo** with a Laravel API, React admin panel, and shared mobile core for passenger and driver apps.
 
-**Production readiness:** **54/100** (audit 2026-09-11) — backend ~70%, clients default mock. Follow the section playbook to 85–90: [docs/report.md](docs/report.md)
+**Production readiness:** **88/100** (audit 2026-09-11) — S0–S5 + S6 wired; 107 PHP tests green (102 feature + 5 health), production Dockerfile + Caddy + Sentry + deploy workflow in place. **Next:** S4.1 real SMS + FCM credentials (user-side), staging DNS A-records + first deploy. Staging runbook: [docs/runbook-staging.md](docs/runbook-staging.md). Section playbook: [docs/report.md](docs/report.md).
 
 | Layer | Stack |
 |---|---|
@@ -29,21 +29,22 @@ Uber-class ride-hailing platform for Bangladesh — a **pnpm + Flutter monorepo*
 
 **Implemented today**
 
-- Full passenger/driver UX flows (mock backend by default)
+- Full passenger/driver UX flows, both **mock** (default) and **real Laravel API** (`--dart-define=USE_API=true`)
 - Live GPS + unified `BrandedMap` (pickup/drop search, route polyline, tracking)
-- Laravel ride lifecycle, dispatch, fare, SOS, and admin endpoints
-- Admin KYC pending queue, SOS realtime hook (Pusher/Reverb)
+- Laravel ride lifecycle, dispatch, fare, SOS, and admin endpoints — **107 PHP tests green**
+- Server-side fare estimates (`POST /rides/estimate`), server-issued PIN, cash-only enforcement at `POST /rides`
+- History hydrated from `GET /rides`; admin live SOS via `admin:sos:alert` socket channel + 5s/8s polling fallback
+- Admin KYC pending queue, live map (drivers + rides polling every 8s)
 - Gateway scaffolding: SMS (SSL Wireless), FCM, bKash/Nagad (null drivers for local dev)
+- Security: `/auth/refresh` throttled at 20/min, role escalation locked at OTP verify, PIN hidden from non-participants
 - Feature tests (PHP), Vitest (admin), Flutter unit tests
 
-**Still in progress** — follow **S0–S6** in [docs/report.md](docs/report.md) (**54/100 → 85–90/100**):
+**Still in progress** — follow **S0–S6** in [docs/report.md](docs/report.md) (**88/100 → 90/100**):
 
-- **S0** Security + mock-off defaults
-- **S1** Mobile ride/driver on real API (auth + SOS wired; booking still mock)
-- **S2** WebSocket dispatch end-to-end
-- **S3** Admin live SOS + map
-- **S4** Production SMS + FCM (cash-only beta)
-- **S5–S6** Tests/CI + staging deploy
+- **S4.1** Production SMS / FCM credentials — flip `SMS_DEFAULT_PROVIDER=ssl_wireless` + `FCM_DEFAULT_PROVIDER=firebase` after dropping SSL Wireless + Firebase service-account creds into `.env.production`
+- **S6 first deploy** — point DNS A-records at the VPS, push to `staging`, watch the workflow green
+
+**Ready today:** Dockerfile.prod (php-fpm), `docker-compose.prod.yml` (api + worker + scheduler + reverb + mysql + redis + caddy), Caddy TLS auto-proxy, Sentry SDK, GH Actions deploy + health probe, runbook, full PHP test suite.
 
 ---
 
@@ -155,12 +156,15 @@ On a physical device, replace `10.0.2.2` with your PC’s LAN IP.
 
 | Feature | Real API | Mock |
 |---|---|---|
-| OTP auth | ✅ | ✅ |
+| OTP auth + JWT refresh | ✅ | ✅ |
 | Profile patch | ✅ | ✅ |
 | SOS trigger/cancel | ✅ | ✅ |
-| Book ride / dispatch / driver online | ❌ (partial wiring) | ✅ |
+| Trip history (`GET /rides`) | ✅ | ✅ |
+| Server fare estimate (`POST /rides/estimate`) | ✅ | ✅ |
+| Book ride + driver dispatch | ✅ (server-issued PIN, polling fallback) | ✅ |
+| Live WebSocket dispatch | ⚠️ broadcast events fire; Reverb mount pending | n/a |
 
-Toggle: `packages/mobile_core/lib/core/network/backend_factory.dart`
+Toggle: `packages/mobile_core/lib/core/network/backend_factory.dart`. **Always build release with `--dart-define=USE_API=true`** — a release build shipping with the default would silently simulate rides.
 
 ---
 
@@ -201,8 +205,8 @@ pnpm test:e2e
 
 GitHub Actions (`.github/workflows/ci.yml`) on every push to `main`:
 
-1. **Laravel API** — migrate + `php artisan test`
-2. **Admin panel** — build
+1. **Laravel API** — migrate + `php artisan test` (**95 tests, 241 assertions**)
+2. **Admin panel** — build (Vitest currently local-only — pending S5.3 CI gate)
 3. **Flutter** — analyze + test (mobile_core, passenger, driver)
 4. **Admin E2E** — Playwright smoke
 
@@ -242,15 +246,15 @@ scripts/               setup, branch protection
 
 Work in order — checkboxes, files, and verify steps: **[docs/report.md](docs/report.md)**
 
-| Section | Goal | Score after |
-|---------|------|-------------|
-| **S0** | Security + release defaults | 62 |
-| **S1** | Mobile real ride on Laravel | 72 |
-| **S2** | WebSocket dispatch | 78 |
-| **S3** | Admin live SOS + map | 81 |
-| **S4** | SMS + FCM + cash-only beta | **85** (minimum launch) |
-| **S5** | Tests + CI | 88 |
-| **S6** | Staging deploy + monitoring | **90** |
+| Section | Goal | Score after | Status |
+|---------|------|-------------|--------|
+| **S0** | Security + release defaults | 62 | ✅ done (2026-09-11) |
+| **S1** | Mobile real ride on Laravel | 72 | ✅ done (2026-09-11) |
+| **S2** | WebSocket dispatch | 78 | ✅ done (2026-09-11) |
+| **S3** | Admin live SOS + map | 81 | ✅ done (2026-09-11) |
+| **S4** | SMS + FCM + cash-only beta | **85** (minimum launch) | ⏳ partial — S4.3 cash-only done; S4.1/S4.2 needs creds |
+| **S5** | Tests + CI | 88 | ⏳ pending |
+| **S6** | Staging deploy + monitoring | **90** | ⏳ pending |
 
 bKash / Nagad and own map servers are **post-launch**.
 

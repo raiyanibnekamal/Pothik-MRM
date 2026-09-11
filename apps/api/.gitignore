@@ -13,3 +13,8 @@ npm-debug.log
 yarn-error.log
 /.idea
 /.vscode
+
+# Staging secrets — must NEVER be committed
+infra/docker/secrets/*.txt
+infra/docker/.env.production
+

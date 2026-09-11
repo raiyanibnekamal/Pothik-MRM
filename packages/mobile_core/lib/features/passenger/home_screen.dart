@@ -23,16 +23,34 @@ import 'package:mobile_core/features/passenger/passenger_shared.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 /// Uber-style home feed: Where to, Later, For you (Bike/Car), recents.
-class PassengerHomeTab extends StatelessWidget {
+class PassengerHomeTab extends StatefulWidget {
   const PassengerHomeTab({super.key, this.onOpenServices});
 
   final VoidCallback? onOpenServices;
 
   @override
+  State<PassengerHomeTab> createState() => _PassengerHomeTabState();
+}
+
+class _PassengerHomeTabState extends State<PassengerHomeTab> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await context.read<RideCubit>().backend.refreshHistory();
+      } on Object {
+        // Mock backend has no-op; ignore.
+      }
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final ride = context.watch<RideCubit>().state;
-    final recents = context.read<RideCubit>().backend.history;
+    final recents = context.watch<RideCubit>().backend.history;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -683,15 +701,24 @@ class _RideOptionsBody extends StatelessWidget {
               child: _TypeCard(
                 type: t,
                 selected: state.selectedType?.id == t.id,
-                fare: context.read<RideCubit>().breakdownFor(t),
-                onTap: () => context.read<RideCubit>().selectType(t),
+                fare: context.read<RideCubit>().previewBreakdownFor(t),
+                onTap: () {
+                  final cubit = context.read<RideCubit>();
+                  cubit.selectType(t);
+                  // Kick off the async server estimate in the background so
+                  // the card rebuilds with the authoritative fare once it
+                  // returns. Failures fall back to the preview estimate.
+                  unawaited(cubit.breakdownFor(t).catchError((_) {
+                    return cubit.previewBreakdownFor(t);
+                  }));
+                },
               ),
             ),
           const SizedBox(height: 8),
           Builder(builder: (context) {
             final t = state.selectedType;
             if (t == null) return const SizedBox.shrink();
-            final fare = context.read<RideCubit>().breakdownFor(t);
+            final fare = context.read<RideCubit>().previewBreakdownFor(t);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -770,7 +797,7 @@ class _RideOptionsBody extends StatelessWidget {
   }
 }
 
-class _TypeCard extends StatelessWidget {
+class _TypeCard extends StatefulWidget {
   const _TypeCard({
     required this.type,
     required this.selected,
@@ -784,29 +811,34 @@ class _TypeCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_TypeCard> createState() => _TypeCardState();
+}
+
+class _TypeCardState extends State<_TypeCard> {
+  @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     return Pressable(
-      onTap: onTap,
+      onTap: widget.onTap,
       borderRadius: AppRadius.mdAll,
       child: AnimatedContainer(
         duration: Pressable.duration,
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? AppColors.navy50 : AppColors.surface,
+          color: widget.selected ? AppColors.navy50 : AppColors.surface,
           borderRadius: AppRadius.mdAll,
           border: Border.all(
-            color: selected ? AppColors.navy900 : AppColors.borderDefault,
-            width: selected ? 2 : 1,
+            color: widget.selected ? AppColors.navy900 : AppColors.borderDefault,
+            width: widget.selected ? 2 : 1,
           ),
         ),
         child: Row(
           children: [
             VectorPulse(
-              enabled: selected,
+              enabled: widget.selected,
               child: Icon(
-                type.code == 'BIKE'
+                widget.type.code == 'BIKE'
                     ? PhosphorIconsRegular.motorcycle
                     : PhosphorIconsRegular.car,
                 color: AppColors.navy900,
@@ -817,12 +849,12 @@ class _TypeCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(type.label(s.isBn), style: AppText.label()),
-                  Text(s.etaMin(type.etaMin), style: AppText.helper()),
+                  Text(widget.type.label(s.isBn), style: AppText.label()),
+                  Text(s.etaMin(widget.type.etaMin), style: AppText.helper()),
                 ],
               ),
             ),
-            Text(formatTaka(fare.total), style: AppText.heroNumber()),
+            Text(formatTaka(widget.fare.total), style: AppText.heroNumber()),
           ],
         ),
       ),

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Constants\ErrorCodes;
 use App\Enums\RideStatus;
+use App\Events\RideStatusChanged;
 use App\Exceptions\ApiException;
 use App\Models\DriverCommissionDebt;
 use App\Models\PlatformConfig;
@@ -80,6 +81,17 @@ class PaymentService
                     'completed_at' => now(),
                 ]);
             }
+
+            // S2.3 — broadcast completion + cash confirmation.
+            $completed = $ride->fresh();
+            event(new RideStatusChanged(
+                (string) $completed->id,
+                (string) $completed->passenger_id,
+                $completed->driver_id !== null ? (string) $completed->driver_id : null,
+                (string) $completed->getOriginal('status'),
+                (string) $completed->status,
+                'cash_confirmed',
+            ));
 
             return ['transaction' => $txn, 'commission_debt' => $commission, 'already_processed' => false];
         });

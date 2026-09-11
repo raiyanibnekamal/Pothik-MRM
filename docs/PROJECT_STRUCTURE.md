@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Version** | 1.2 |
+| **Version** | 1.3 |
 | **Date** | 2026-09-11 |
 | **Layout** | Monorepo (pnpm workspaces + Flutter packages) |
 | **Backend stack** | **Laravel 9 + PHP 8.2 + MySQL + Redis** |
@@ -26,11 +26,11 @@ Pothik MRM/
 │   ├── shared-constants/    # Error codes aligned with Laravel
 │   ├── ui/                  # Design tokens for admin
 │   └── mobile_core/         # Shared Flutter UI, maps, cubits, api/mock backend
-├── infra/docker/            # mysql, redis, api, queue, scheduler, ws (Reverb)
-├── docs/                    # PRD, architecture, ADRs, production report
+├── infra/docker/            # dev + prod compose, Dockerfile.prod, Caddyfile, prod env template, secrets/
+├── docs/                    # PRD, architecture, ADRs, production report, staging runbook
 ├── test/e2e/                # Playwright admin smoke (1 spec)
 ├── scripts/                 # setup, branch protection
-├── .github/workflows/       # CI (4 jobs)
+├── .github/workflows/       # ci.yml (4 jobs) + deploy-staging.yml (rsync + compose up + health-probe)
 ├── package.json
 └── pnpm-workspace.yaml
 ```
@@ -70,7 +70,7 @@ tests/
 └── Unit/                      # 3 files (fare, SOS, example)
 ```
 
-**Test run:** `cd apps/api && php artisan test` → **91 passed**
+**Test run:** `cd apps/api && php artisan test` → **95 passed** (+ `SecurityHardeningTest` covering throttle / role lock / PIN gating / cash-only)
 
 ---
 
@@ -143,9 +143,9 @@ Env: `VITE_API_URL`, `VITE_USE_MOCK=false`, `VITE_SOCKET_URL` for staging.
 
 | Layer | Location | Count |
 |-------|----------|-------|
-| PHP API | `apps/api/tests/` | **91 tests** |
+| PHP API | `apps/api/tests/` | **107 tests** (102 Feature + 5 Health) |
 | Flutter | `packages/mobile_core/test/` + app tests | ~26 |
-| Admin Vitest | `apps/admin-panel/src/**/*.test.ts(x)` | ~22 (not in CI) |
+| Admin Vitest | `apps/admin-panel/src/**/*.test.ts(x)` | ~22 (not in CI — pending S5.3) |
 | E2E | `test/e2e/specs/` | 1 |
 
 ---

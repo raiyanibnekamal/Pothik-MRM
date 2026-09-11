@@ -190,7 +190,43 @@ class RideCubit extends Cubit<RideState> {
 
   void selectType(VehicleType t) => emit(state.copyWith(selectedType: t));
 
-  FareBreakdown breakdownFor(VehicleType t) {
+  /// S1.1 — Returns a fare breakdown for the given vehicle type.
+  ///
+  /// In **API mode** this issues an async call to `POST /rides/estimate` so
+  /// the server-side fare rules (zone, surge, promos) are the source of
+  /// truth. Callers should `await` this and rebuild on the result; in mock
+  /// mode it's a pure local computation and never blocks.
+  Future<FareBreakdown> breakdownFor(VehicleType t) async {
+    final api = _api;
+    if (api != null) {
+      final drop = state.drop;
+      if (drop != null) {
+        try {
+          final bdt = await api.fetchEstimate(
+            vehicleCode: t.code,
+            pickup: state.pickup,
+            drop: drop,
+          );
+          return FareBreakdown(
+            base: t.base,
+            distance: (bdt - t.base).clamp(0, bdt),
+            time: 0,
+            minFare: t.minFare,
+            total: bdt,
+          );
+        } on ApiException {
+          // Server unreachable → fall back to local so the screen never
+          // shows an empty fare.
+        }
+      }
+    }
+    return backend.estimate(t, _billableKm());
+  }
+
+  /// Synchronous local estimate — used as a placeholder by the UI while
+  /// the async server estimate is in flight. Pure local cost, never hits
+  /// the network.
+  FareBreakdown previewBreakdownFor(VehicleType t) {
     return backend.estimate(t, _billableKm());
   }
 

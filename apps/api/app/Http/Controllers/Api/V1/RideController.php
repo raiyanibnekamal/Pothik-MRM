@@ -96,13 +96,23 @@ class RideController extends Controller
             'drop_lat' => 'required|numeric',
             'drop_lng' => 'required|numeric',
             'drop_address' => 'required|string|max:500',
-            'payment_method' => 'sometimes|in:cash,bkash,nagad,wallet,card',
+            'payment_method' => 'sometimes|in:cash',
         ]);
+
+        // S4.3 — beta is cash-only. Reject anything else with a clear 422.
+        $method = strtolower((string) $request->input('payment_method', 'cash'));
+        if ($method !== 'cash') {
+            throw new ApiException(
+                ErrorCodes::VALIDATION_ERROR,
+                trans('Cash-only beta. Selected payment method is not available.'),
+                422
+            );
+        }
 
         $ride = $this->rideService->create($request->user(), $request->all());
 
         return ApiResponse::success(
-            $this->rideService->formatRide($ride),
+            $this->rideService->formatRide($ride, false, $request->user()),
             'Ride requested',
             201
         );
@@ -113,7 +123,7 @@ class RideController extends Controller
         $ride = $this->findAuthorizedRide($request, $id);
         $includePhone = in_array($ride->status, RideStatus::activeStatuses(), true);
 
-        return ApiResponse::success($this->rideService->formatRide($ride, $includePhone));
+        return ApiResponse::success($this->rideService->formatRide($ride, $includePhone, $request->user()));
     }
 
     public function index(Request $request)
@@ -130,7 +140,7 @@ class RideController extends Controller
         $rides = $query->orderByDesc('created_at')->paginate(20);
 
         return ApiResponse::success([
-            'items' => $rides->getCollection()->map(fn ($r) => $this->rideService->formatRide($r)),
+            'items' => $rides->getCollection()->map(fn ($r) => $this->rideService->formatRide($r, false, $user)),
             'pagination' => [
                 'current_page' => $rides->currentPage(),
                 'last_page' => $rides->lastPage(),
@@ -144,7 +154,7 @@ class RideController extends Controller
         $ride = Ride::findOrFail($id);
         $ride = $this->dispatchService->accept($ride, $request->user()->id);
 
-        return ApiResponse::success($this->rideService->formatRide($ride));
+        return ApiResponse::success($this->rideService->formatRide($ride, false, $request->user()));
     }
 
     public function decline(Request $request, string $id)
@@ -164,7 +174,7 @@ class RideController extends Controller
 
         $ride = $this->rideService->transition($ride, RideStatus::DRIVER_ARRIVED, $request->user());
 
-        return ApiResponse::success($this->rideService->formatRide($ride));
+        return ApiResponse::success($this->rideService->formatRide($ride, false, $request->user()));
     }
 
     public function arriving(Request $request, string $id)
@@ -176,7 +186,7 @@ class RideController extends Controller
 
         $ride = $this->rideService->transition($ride, RideStatus::DRIVER_ARRIVING, $request->user());
 
-        return ApiResponse::success($this->rideService->formatRide($ride));
+        return ApiResponse::success($this->rideService->formatRide($ride, false, $request->user()));
     }
 
     /**
@@ -197,7 +207,7 @@ class RideController extends Controller
         }
 
         return ApiResponse::success([
-            'ride' => $this->rideService->formatRide($attempt->ride),
+            'ride' => $this->rideService->formatRide($attempt->ride, false, $request->user()),
             'expires_in_seconds' => max(0, 15 - $attempt->offered_at->diffInSeconds(now())),
         ]);
     }
@@ -209,7 +219,7 @@ class RideController extends Controller
         $ride = Ride::findOrFail($id);
         $ride = $this->rideService->verifyPin($ride, $request->pin, $request->user());
 
-        return ApiResponse::success($this->rideService->formatRide($ride));
+        return ApiResponse::success($this->rideService->formatRide($ride, false, $request->user()));
     }
 
     public function cancel(Request $request, string $id)
@@ -224,7 +234,7 @@ class RideController extends Controller
 
         $ride = $this->rideService->transition($ride, RideStatus::CANCELLED, $request->user(), $request->reason);
 
-        return ApiResponse::success($this->rideService->formatRide($ride));
+        return ApiResponse::success($this->rideService->formatRide($ride, false, $request->user()));
     }
 
     public function confirmCash(Request $request, string $id)
@@ -246,7 +256,7 @@ class RideController extends Controller
             'transaction_id' => $result['transaction']->id,
             'commission_debt' => $result['commission_debt'] ?? null,
             'already_processed' => $result['already_processed'],
-            'ride' => $this->rideService->formatRide($ride->fresh()),
+            'ride' => $this->rideService->formatRide($ride->fresh(), false, $request->user()),
         ]);
     }
 

@@ -171,7 +171,18 @@ class RideService
             'track_token' => $ride->track_token ?? Str::random(48),
         ]);
 
-        return $ride->fresh();
+        $ride = $ride->fresh();
+        // S2.3 — notify passenger + driver that the ride started.
+        event(new RideStatusChanged(
+            (string) $ride->id,
+            (string) $ride->passenger_id,
+            $ride->driver_id !== null ? (string) $ride->driver_id : null,
+            (string) $ride->getOriginal('status'),
+            (string) $ride->status,
+            'ride_started',
+        ));
+
+        return $ride;
     }
 
     public function rate(Ride $ride, User $rater, int $score, ?array $tags = null, ?string $comment = null): Rating
@@ -211,9 +222,23 @@ class RideService
         });
     }
 
-    public function formatRide(Ride $ride, bool $includePhone = false): array
+    public function formatRide(Ride $ride, bool $includePhone = false, ?User $viewer = null): array
     {
         $ride->loadMissing(['passenger', 'driver.driverProfile', 'vehicleType']);
+
+        // S0.3 — PIN visibility is gated by viewer role. Only the booking
+        // passenger (and the assigned driver after they own the trip) should
+        // ever receive it. Admin and public/track callers get a redacted
+        // response regardless of internal state.
+        $revealPin = false;
+        if ($viewer !== null) {
+            if ($viewer->id === $ride->passenger_id) {
+                $revealPin = true;
+            } elseif ($viewer->id === $ride->driver_id
+                && in_array($ride->status, RideStatus::activeStatuses(), true)) {
+                $revealPin = true;
+            }
+        }
 
         $data = [
             'id' => $ride->id,
@@ -232,13 +257,16 @@ class RideService
             'estimated_fare' => (float) $ride->estimated_fare,
             'locked_fare' => $ride->locked_fare ? (float) $ride->locked_fare : null,
             'final_fare' => $ride->final_fare ? (float) $ride->final_fare : null,
-            'pin' => $ride->pin,
+            // Only include the field key at all when the viewer is allowed
+            // to see it. Omitting (vs. returning null) keeps the leak surface
+            // smaller — public-track clients literally cannot read `.pin`.
+            'pin' => $revealPin ? $ride->pin : null,
             'vehicle_type' => $ride->vehicleType ? [
                 'slug' => $ride->vehicleType->slug,
                 'name_en' => $ride->vehicleType->name_en,
                 'name_bn' => $ride->vehicleType->name_bn,
             ] : null,
-            'passenger' => $ride->passenger ? [
+            'passenger' => $revealPin && $ride->passenger ? [
                 'id' => $ride->passenger->id,
                 'name' => $ride->passenger->name,
                 'rating' => (float) $ride->passenger->rating_avg,

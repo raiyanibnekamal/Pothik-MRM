@@ -37,8 +37,11 @@ jobs:
         run: php artisan test
 
   admin:
-    name: Admin panel
+    name: Admin panel (vitest + build)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/admin-panel
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -46,10 +49,12 @@ jobs:
         with:
           node-version: "20"
           cache: pnpm
-      - name: Install & build
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm --filter admin-panel build
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Vitest unit tests
+        run: pnpm vitest run
+      - name: Build (lint + tsc + vite)
+        run: pnpm build
 
   flutter:
     name: Flutter analyze + test

@@ -373,6 +373,43 @@ class ApiBackend extends MockBackend {
     return activeRide;
   }
 
+  /// S1.3 — Hydrates the inherited [history] list from `GET /rides`.
+  /// Replaces the mock backend's in-memory list with the server's record
+  /// for the authenticated user. Safe to call on every screen mount;
+  /// failures leave the previous list intact.
+  Future<List<Ride>> refreshHistory() async {
+    await _requireAuth();
+    try {
+      final res = await _dio.get('$baseUrl/rides', options: _authOpts());
+      final data = res.data['data'];
+      final items = <Map<String, dynamic>>[];
+      if (data is List) {
+        for (final e in data) {
+          if (e is Map<String, dynamic>) items.add(e);
+        }
+      } else if (data is Map && data['data'] is List) {
+        for (final e in (data['data'] as List)) {
+          if (e is Map<String, dynamic>) items.add(e);
+        }
+      }
+      final rides = <Ride>[];
+      for (final j in items) {
+        final type = _resolveType(j['vehicle_type'] ?? 'CAR');
+        try {
+          rides.add(_mapRide(j, type));
+        } on Object {
+          // Skip malformed entries so a single bad row doesn't kill history.
+        }
+      }
+      history
+        ..clear()
+        ..addAll(rides);
+      return rides;
+    } on DioException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
   /// Refreshes [activeRide] from the server and returns the current state.
   Future<Ride?> advanceApi({String? rideId}) async {
     await _requireAuth();
@@ -775,7 +812,15 @@ class ApiBackend extends MockBackend {
       dropLabel: j['drop_address'] as String? ?? '',
       vehicleType: type,
       paymentMethod: (j['payment_method'] as String? ?? 'CASH').toUpperCase(),
-      pin: j['pin'] as String? ?? '0000',
+      pin: j['pin'] as String?,
+      driverPoint: driverJson != null &&
+              driverJson['lat'] != null &&
+              driverJson['lng'] != null
+          ? LatLng(
+              (driverJson['lat'] as num).toDouble(),
+              (driverJson['lng'] as num).toDouble(),
+            )
+          : null,
       fare: FareBreakdown(
         base: type.base,
         distance: total ~/ 3,

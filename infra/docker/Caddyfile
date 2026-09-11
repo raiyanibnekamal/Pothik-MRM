@@ -1,0 +1,52 @@
+# Pothik MRM — production Caddyfile.
+#
+# Auto-TLS via Let's Encrypt. Set the three hostnames to your real staging
+# DNS A-records before first run; Caddy requires DNS to resolve in order to
+# serve the ACME challenge.
+#
+# Layout:
+#   api.pothik.example    -> php-fpm fastcgi
+#   ws.pothik.example     -> Reverb (ws upgrade)
+#   admin.pothik.example  -> static admin panel (built image not included
+#                            in S6.1 — wired in S7; placeholder 502 for now)
+#
+# Security headers follow Mozilla's intermediate preset, tightened to remove
+# Referer on cross-origin so admin. can't leak api. URLs.
+{
+    admin off
+    auto_https on
+    email ops@pothik.example
+}
+
+(common-headers) {
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        # CSP tightened in S7 once admin. is mounted under the same hostname
+        RemoveHeader "Server"
+    }
+    encode zstd gzip
+}
+
+api.pothik.example {
+    import common-headers
+    reverse_proxy api:9000 {
+        transport fastcgi {
+            split .php
+            root /var/www/html/public
+        }
+    }
+}
+
+ws.pothik.example {
+    import common-headers
+    reverse_proxy reverb:8080
+}
+
+admin.pothik.example {
+    import common-headers
+    respond 503 "Admin panel not deployed in S6.1"
+}

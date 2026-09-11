@@ -1,0 +1,78 @@
+# Production PHP 8.2-FPM image for Pothik MRM API.
+#
+# Why a separate file (vs. Dockerfile):
+#   - Dockerfile ships `php artisan serve` for `docker compose up` on a laptop.
+#   - The prod composer step in Dockerfile swallows failures (`|| true`) which
+#     would let a broken lockfile ship silently. Prod must fail loud.
+#   - We need the php-fpm socket exposed to a sidecar (caddy) instead of a TCP
+#     port, so the reverse proxy can terminate TLS and forward through
+#     fastcgi without booting a long-lived `artisan serve` process per request.
+#
+# Image size: ~280 MB on PHP 8.2-bookworm with prod-only extensions.
+# Build context must be the apps/api directory.
+#
+# Build:
+#   docker build -f Dockerfile.prod -t pothik-api:prod .
+#
+# Run (compose handles the rest):
+#   docker compose -f infra/docker/docker-compose.prod.yml up -d
+
+FROM php:8.2-fpm-bookworm AS base
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    COMPOSER_ALLOW_SUPERUSER=1 \
+    COMPOSER_NO_INTERACTION=1
+
+# System deps + PHP extensions required by Laravel + Reverb.
+# - pdo_mysql:   database connection
+# - zip:         composer + Excel/CSV readers
+# - bcmath:      fare math
+# - intl:        locale-aware formatting for bn / en
+# - opcache:     production-grade bytecode cache
+# - redis (PECL): queue + cache backend
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git unzip libzip-dev libpng-dev libicu-dev zlib1g-dev \
+    && docker-php-ext-install -j$(nproc) pdo_mysql zip bcmath intl opcache \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apt-get purge -y --auto-remove \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy composer.
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Workdir matches docker-compose.prod volume mount target.
+WORKDIR /var/www/html
+
+# Copy composer manifests first so dependency layer caches cleanly across
+# code-only rebuilds. `--no-dev` keeps the image free of testing/QA tooling.
+COPY composer.json composer.lock ./
+RUN composer install \
+        --no-dev \
+        --no-scripts \
+        --no-autoloader \
+        --prefer-dist \
+        --optimize-autoloader
+
+# Copy the rest of the app source.
+COPY . .
+
+# Generate the optimized autoloader now that all classes are present.
+RUN composer dump-autoload --classmap-authoritative --no-dev \
+    && mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache
+
+# Tune opcache for production. These are conservative defaults that fit a
+# ~50-route API; revisit if the bundle size crosses 5 MB.
+ENV PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
+    PHP_OPCACHE_MAX_ACCELERATED_FILES=20000 \
+    PHP_OPCACHE_MEMORY_CONSUMPTION=192
+
+EXPOSE 9000
+
+# Health probe: php-fpm answers a "ping" through `cgi-fcgi` if present,
+# otherwise the compose healthcheck falls back to the sidecar curl /health.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["php-fpm-healthcheck", "-n"] || exit 1
+
+CMD ["php-fpm", "-F"]

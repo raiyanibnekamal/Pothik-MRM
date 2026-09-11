@@ -50,7 +50,11 @@ return [
     'channels' => [
         'stack' => [
             'driver' => 'stack',
-            'channels' => ['single'],
+            // S6.3 — production errors fan out to Sentry in addition to disk.
+            // Empty DSN short-circuits the handler so local/dev stays silent.
+            'channels' => env('APP_ENV') === 'production'
+                ? ['single', 'sentry']
+                : ['single'],
             'ignore_exceptions' => false,
         ],
 
@@ -113,6 +117,15 @@ return [
 
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
+        ],
+
+        'sentry' => [
+            'driver' => 'sentry',
+            'level' => env('LOG_LEVEL', 'warning'),
+            'context' => [
+                'app_name' => env('APP_NAME', 'pothik'),
+                'environment' => env('APP_ENV', 'production'),
+            ],
         ],
     ],
 

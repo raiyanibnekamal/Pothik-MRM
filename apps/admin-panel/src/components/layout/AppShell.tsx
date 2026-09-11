@@ -13,9 +13,10 @@ import {
   Settings,
 } from "lucide-react"
 import { useT } from "../../i18n/LocaleProvider"
-import { api, envName, type Driver } from "../../api/client"
+import { api, envName, store, type Driver } from "../../api/client"
 import { SosBanner } from "../sos/SosBanner"
 import { useSosPolling } from "../../hooks/useSosPolling"
+import { useSosRealtime } from "../../hooks/useSosRealtime"
 
 const links = [
   { to: "/", key: "dashboard" as const, icon: LayoutDashboard },
@@ -34,6 +35,9 @@ export function AppShell() {
   const { t, locale, setLocale } = useT()
   const nav = useNavigate()
   const { sos } = useSosPolling()
+  // S3.1 — subscribe to admin:sos:alert socket channel (no-op when
+  // VITE_SOCKET_URL is unset). Polling remains as a safety net.
+  useSosRealtime(store.token)
   const sosCount = sos.length
   const [kycPending, setKycPending] = useState(0)
 

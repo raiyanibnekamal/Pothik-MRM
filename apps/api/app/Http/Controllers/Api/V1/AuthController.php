@@ -42,19 +42,21 @@ class AuthController extends Controller
 
         $this->otpService->verifyOtp($request->phone, $request->code);
 
-        $role = $request->role ?? UserRole::PASSENGER;
+        // S0.2 — Role assignment is one-shot on first signup only. Existing
+        // users keep their original role so a passenger can never elevate
+        // to driver just by passing `role=driver` on a verify call. Driver
+        // onboarding for an existing passenger must go through the dedicated
+        // driver KYC flow.
         $user = User::firstOrCreate(
             ['phone' => $request->phone],
-            ['role' => $role, 'language' => 'bn']
+            ['role' => $request->role ?? UserRole::PASSENGER, 'language' => 'bn']
         );
 
         if ($user->is_blocked) {
             throw new ApiException(ErrorCodes::BLOCKED, 'Account blocked', 403);
         }
 
-        if ($request->role && $user->role !== $request->role) {
-            $user->update(['role' => $request->role]);
-        }
+        // Intentional: no $user->update([... 'role' => ...]) on existing users.
 
         return ApiResponse::success($this->tokenService->issueTokens($user));
     }

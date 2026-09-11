@@ -22,7 +22,10 @@ Route::prefix('v1')->group(function () {
     // per minute without hitting the per-phone gate.
     Route::post('/auth/otp/request', [AuthController::class, 'requestOtp'])->middleware('throttle:otp');
     Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:otp');
-    Route::post('/auth/refresh', [AuthController::class, 'refresh']);
+    // S0.1 — Throttle refresh by IP so a stolen refresh token cannot be
+    // brute-forced and a misbehaving client cannot flood the auth service.
+    // 20/min is generous for normal mobile rehydration but blocks abuse.
+    Route::post('/auth/refresh', [AuthController::class, 'refresh'])->middleware('throttle:20,1');
     Route::post('/auth/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:6,1');
 
     Route::get('/rides/vehicle-types', [RideController::class, 'vehicleTypes']);
