@@ -2,6 +2,8 @@
 
 Uber-class ride-hailing platform for Bangladesh — a **pnpm + Flutter monorepo** with a Laravel API, React admin panel, and shared mobile core for passenger and driver apps.
 
+**Production readiness:** **54/100** (audit 2026-09-11) — backend ~70%, clients default mock. Follow the section playbook to 85–90: [docs/report.md](docs/report.md)
+
 | Layer | Stack |
 |---|---|
 | **Backend** | Laravel 9 · PHP 8.2 · MySQL 8 · Redis · JWT |
@@ -11,7 +13,7 @@ Uber-class ride-hailing platform for Bangladesh — a **pnpm + Flutter monorepo*
 | **Real-time** | Laravel Reverb (Docker) · broadcast events · Pusher client |
 | **CI** | GitHub Actions — API, Admin, Flutter, E2E |
 
-**Docs:** [PRD](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Project structure](docs/PROJECT_STRUCTURE.md) · [Contributing](docs/CONTRIBUTING.md) · [Production readiness report](docs/report.md)
+**Docs:** [PRD](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Project structure](docs/PROJECT_STRUCTURE.md) · [Contributing](docs/CONTRIBUTING.md) · [Production playbook](docs/report.md)
 
 ---
 
@@ -34,12 +36,14 @@ Uber-class ride-hailing platform for Bangladesh — a **pnpm + Flutter monorepo*
 - Gateway scaffolding: SMS (SSL Wireless), FCM, bKash/Nagad (null drivers for local dev)
 - Feature tests (PHP), Vitest (admin), Flutter unit tests
 
-**Still in progress** — see [docs/report.md](docs/report.md) for the full gap analysis (~58/100 production score):
+**Still in progress** — follow **S0–S6** in [docs/report.md](docs/report.md) (**54/100 → 85–90/100**):
 
-- Mobile ride/driver flow on real API (auth + SOS wired; booking/dispatch mostly mock)
-- End-to-end WebSocket dispatch in production
-- Production SMS, FCM push, and digital payments
-- Staging/production deploy
+- **S0** Security + mock-off defaults
+- **S1** Mobile ride/driver on real API (auth + SOS wired; booking still mock)
+- **S2** WebSocket dispatch end-to-end
+- **S3** Admin live SOS + map
+- **S4** Production SMS + FCM (cash-only beta)
+- **S5–S6** Tests/CI + staging deploy
 
 ---
 
@@ -234,16 +238,21 @@ scripts/               setup, branch protection
 
 ---
 
-## Roadmap (P0 → P1)
+## Roadmap (production playbook)
 
-1. Wire mobile ride + driver dispatch to Laravel (`api_backend.dart`)
-2. Run Reverb in staging; connect mobile Pusher client end-to-end
-3. Production SMS (SSL Wireless) + OTP hardening
-4. FCM push for dispatch and SOS
-5. bKash / Nagad payment gateways
-6. Staging deploy + locked CORS
+Work in order — checkboxes, files, and verify steps: **[docs/report.md](docs/report.md)**
 
-Details, scores, and step-by-step fixes: **[docs/report.md](docs/report.md)**
+| Section | Goal | Score after |
+|---------|------|-------------|
+| **S0** | Security + release defaults | 62 |
+| **S1** | Mobile real ride on Laravel | 72 |
+| **S2** | WebSocket dispatch | 78 |
+| **S3** | Admin live SOS + map | 81 |
+| **S4** | SMS + FCM + cash-only beta | **85** (minimum launch) |
+| **S5** | Tests + CI | 88 |
+| **S6** | Staging deploy + monitoring | **90** |
+
+bKash / Nagad and own map servers are **post-launch**.
 
 ---
 

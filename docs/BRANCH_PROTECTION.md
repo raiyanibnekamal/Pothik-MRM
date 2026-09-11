@@ -16,7 +16,7 @@
    - **Require a pull request before merging**
    - **Require approvals** → 1
    - **Require review from Code Owners**
-   - **Require status checks** → select: `Laravel API`, `Admin panel`, `Flutter analyze`, `Admin E2E smoke`
+   - **Require status checks** → select: `Laravel API`, `Admin panel`, `Flutter analyze + test`, `Admin E2E smoke`
    - **Require conversation resolution**
    - **Restrict who can push** → add only: `raiyanibnekamal`
    - **Do not allow bypassing** (optional)

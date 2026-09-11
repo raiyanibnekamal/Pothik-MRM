@@ -2,9 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Version** | 1.1 |
-| **Date** | 2026-09-09 |
-| **Stack** | Laravel 9 · MySQL · Redis · Flutter · React Admin |
+| **Version** | 1.2 |
+| **Date** | 2026-09-11 |
+| **Stack** | Laravel 9 · PHP 8.2 · MySQL · Redis · Flutter · React Admin |
+| **Production score** | **54/100** — see [report.md](report.md) |
 
 Features: [PRD.md](PRD.md). Folders: [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md).
 
@@ -27,21 +28,26 @@ Clients:  Flutter Passenger | Flutter Driver | Admin SPA
           GET /public/track/:token (guardian, no login)
 
                     ┌─────────────────────────┐
-                    │   Nginx / Cloudflare    │
+                    │   Nginx / Cloudflare    │  ← not deployed yet
                     └───────────┬─────────────┘
                                 │
                     ┌───────────▼─────────────┐
                     │   Laravel API (apps/api) │
                     └───┬─────────────┬───────┘
                         │             │
-                 ┌──────▼──────┐ ┌────▼────┐
-                 │   MySQL     │ │  Redis  │
-                 │  (source)   │ │ location│
-                 └─────────────┘ │ OTP/JWT │
-                                 └─────────┘
+                 ┌──────▼──────┐ ┌────▼────────────┐
+                 │   MySQL     │ │  Redis          │
+                 │  (source)   │ │ location/OTP/JWT│
+                 └─────────────┘ └─────────────────┘
+                        │
+                 ┌──────▼──────────────────────┐
+                 │  Laravel Reverb (ws :8080)  │  ← Docker defined;
+                 │  Pusher protocol            │    package not in composer yet
+                 └─────────────────────────────┘
 
-External P0: Google Maps (Places + 1× Matrix), SMS, FCM, object storage
-Later: bKash, Nagad, Laravel Reverb / Socket.IO adapter
+External P0: SMS gateway, FCM, object storage
+Implemented (null default): SSL Wireless SMS, Firebase FCM, bKash/Nagad gateways
+Maps (mobile): Nominatim + OSRM (dev); production geospatial TBD
 ```
 
 ---
@@ -49,33 +55,40 @@ Later: bKash, Nagad, Laravel Reverb / Socket.IO adapter
 ## 3. Backend (Laravel modular monolith)
 
 ```
-HTTP / (future) WebSockets
+HTTP + Broadcast (Reverb/Pusher/test driver)
         │
-   Middleware: JWT, Roles, Envelope, Throttle
+   Middleware: JWT, jwt.blacklist, Roles, Throttle
         │
    Controllers → Services → Models / Redis / Jobs
         │
    { success, data, message } envelope
 ```
 
-### Modules (P0)
+### Modules
 
-| Module | Responsibility |
+| Module | Responsibility | Test coverage |
+|---|---|---|
+| Auth | OTP, JWT 15m + refresh 7d, admin login | ✅ AuthOtp, OtpRateLimit |
+| Profile | User profile, emergency contacts | ⚠️ No HTTP tests |
+| Driver | Onboarding, KYC, online, GPS ingest | ✅ DriverOnboarding |
+| Rides | Estimate, book, dispatch, PIN, cash, rate | ✅ RideLifecycle, RideEstimate |
+| SOS | Trigger, cancel, resolve, admin alerts | ⚠️ Unit only |
+| Admin | Dashboard, KYC, config, live map, users | ❌ No tests |
+| Health | DB + Redis status | ❌ No tests |
+| Integrations | SMS, FCM, payment gateways | ✅ Gateway tests |
+
+### Jobs & scheduler
+
+| Job / command | Schedule |
 |---|---|
-| Auth | OTP, JWT 15m + refresh 7d, admin login |
-| Profile | User profile, emergency contacts |
-| Driver | Onboarding, KYC, online, GPS ingest |
-| Rides | Estimate, book, dispatch, PIN, cash, rate |
-| SOS | Trigger, cancel, resolve, admin alerts |
-| Admin | Dashboard, KYC, config, live map, users |
-| Health | DB + Redis status |
+| `DispatchTimeoutJob` | Queue (15s cascade) |
+| `ReleaseHeldPayoutJob` | Hourly |
+| `pothik:sweep-stale-dispatches` | Every 5 min |
+| `pothik:prune-otps` | Daily |
 
-### Jobs
+Docker compose runs `queue:work`, `schedule:work`, and `reverb:start` (ws service).
 
-- `DispatchTimeoutJob` — 15s cascade
-- `ReleaseHeldPayoutJob` — holding release
-
-### Redis keys (P0)
+### Redis keys
 
 - `driver:{id}:location` — TTL 60s
 - OTP rate limits, JWT blacklist (via predis)
@@ -87,7 +100,8 @@ HTTP / (future) WebSockets
 - Base: `/api/v1/...`
 - Envelope: `{ success, data, message }` / `{ success: false, error: { code, message } }`
 - Error codes: `packages/shared-constants` ↔ `app/Constants/ErrorCodes.php`
-- Socket events: `packages/shared-types` ↔ `app/Constants/SocketEvents.php`
+- Socket events: `packages/shared-types` ↔ Laravel broadcast events
+- Broadcasting auth: `POST /api/v1/broadcasting/auth` (JWT required)
 
 Admin login: `POST /auth/admin/login` (not `/auth/login`).
 
@@ -99,27 +113,37 @@ Admin login: `POST /auth/admin/login` (not `/auth/login`).
 
 ```
 Presentation (screens)
-    → MockBackend | ApiBackend (Dio, USE_API flag)
-    → Secure storage for tokens
+    → MockBackend (default) | ApiBackend (USE_API=true)
+    → Dio + JWT interceptor (401 refresh)
+    → Secure storage for tokens (refresh not restored on launch — fix pending)
 Native: driver GPS service (driver-app only)
+Realtime: PusherRealtimeClient + socket_service.dart (scaffold — not wired to cubits)
+Maps: LocationCubit → BrandedMap (flutter_map + OSRM/Nominatim)
 ```
 
-P0: Auth + profile on real API; ride flow still mock until WebSocket dispatch ships.
+**API mode status:** Auth, profile, SOS, onboarding, and ride/driver HTTP methods exist in `ApiBackend`, but release builds default to mock. Dispatch uses HTTP polling, not WebSocket.
 
 ### Admin (React)
 
 ```
 Pages → api/client.ts → realApi.ts (Laravel mapping)
-Live SOS: 15s poll until Reverb wired
+Mock default: VITE_USE_MOCK !== "false"
+Live SOS: useSosPolling (5s) — useSosRealtime hook exists but not mounted
+KYC: /kyc/pending page wired to /admin/kyc/*
+Realtime client: realtimeClient.ts (Pusher/Reverb when env set)
 ```
+
+Set `VITE_USE_MOCK=false` + Reverb env vars for staging/production.
 
 ---
 
-## 6. Critical flows (P0)
+## 6. Critical flows
 
-**Book → trip:** estimate → POST ride → dispatch job → accept → PIN → in_progress → cash confirm → holding.
+**Book → trip (server):** estimate → POST ride → dispatch job → accept → PIN → in_progress → cash confirm → holding.
 
-**SOS:** authenticate → gating → dedup → insert → SMS + admin alert → 1s location until resolved.
+**Book → trip (client today):** mock timers by default; API mode uses HTTP poll for match/offer.
+
+**SOS:** authenticate → gating → dedup → insert → SMS + admin alert → location until resolved.
 
 **Cash:** `amountCollected === lockedFare`; idempotent confirm; commission debt row.
 
@@ -129,17 +153,26 @@ Live SOS: 15s poll until Reverb wired
 
 - HTTPS/WSS only in prod
 - Role guards on every admin route
-- No client-submitted fare truth
-- OTP throttle 3/10min
+- JWT blacklist on protected routes
+- CORS locked via `CORS_ALLOWED_ORIGINS` env (not `*`)
+- OTP throttle: per-phone + per-IP
+- **Open issues:** unrate-limited refresh; role change on OTP verify; PIN in API responses
 - Mask phones in logs; never log OTP/JWT/NID
 
 ---
 
-## 8. CI/CD (P0)
+## 8. CI/CD
 
-PR → PHP unit tests → admin `tsc` + build → Flutter analyze → Playwright smoke (optional job).
+| Job | What runs |
+|---|---|
+| Laravel API | SQLite migrate + **91 tests** |
+| Admin panel | `tsc -b` + Vite build |
+| Flutter | analyze + test (mobile_core, passenger, driver) |
+| Admin E2E | Playwright mock login (1 spec) |
 
-Staging: migrate + health curl before deploy.
+**Gaps:** no deploy workflow, admin vitest not in CI, no Docker build validation, no monitoring.
+
+Staging: not deployed. Target: migrate + health curl before deploy.
 
 ---
 
@@ -155,4 +188,5 @@ Staging: migrate + health curl before deploy.
 ## Related
 
 - [PRD.md](PRD.md)
+- [report.md](report.md) — Production audit & scores
 - [adr/002-laravel-mysql-stack.md](adr/002-laravel-mysql-stack.md)

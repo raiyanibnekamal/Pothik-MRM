@@ -28,9 +28,9 @@ remote: error: GH006: Protected branch update failed
 
 ## CI must pass before merge
 
-- Laravel API
-- Admin panel
-- Flutter analyze
+- Laravel API (91 tests)
+- Admin panel (build + TypeScript)
+- Flutter analyze + test
 - Admin E2E smoke
 
 ## Setup protection (owner once)

@@ -1,498 +1,433 @@
-# Pothik MRM — Production Readiness Report
+# Pothik MRM — Production Playbook
 
 | Field | Value |
 |-------|-------|
 | **Project** | Pothik MRM / BD Ride Share (বিডি রাইড শেয়ার) |
-| **Version** | 1.0 |
-| **Date** | 2026-09-11 |
+| **Version** | 2.0 (playbook) |
+| **Audit date** | 2026-09-11 |
+| **Last commit audited** | `2cc186c` (main) |
 | **Repo** | [github.com/raiyanibnekamal/Pothik-MRM](https://github.com/raiyanibnekamal/Pothik-MRM) |
-| **Purpose** | Gap analysis, production score, and step-by-step fix roadmap |
+| **Purpose** | এই ফাইল ধরে সেকশন অনুযায়ী কাজ করলে প্রজেক্ট **54/100 → 85–90/100** (one-city beta) হয় |
 
 ---
 
-## Executive Summary
+## How to use this playbook
 
-| Metric | Current | Target (Production) |
-|--------|---------|------------------------|
-| **Overall score** | **58/100** | **85–90/100** (real launch) |
-| **Backend API** | ~85% built | 95%+ hardened |
-| **Mobile ↔ API** | ~25% wired | 95%+ wired |
-| **Admin ↔ API** | ~70% (mock default) | 100% real + WebSocket |
-| **Real-time dispatch** | ~5% | 100% |
-| **Tests** | ~15% | 70%+ critical paths |
-| **Deploy / ops** | ~35% | 90%+ |
+1. কাজের অর্ডার: **S0 → S1 → S2 → S3 → S4 → S5 → S6**। S0 বা S1 skip করবেন না।
+2. প্রতিটা টাস্ক `[ ]`। **Verify** পাস হলেই `[x]` করুন।
+3. প্রতিটা টাস্কে আছে: **File**, **Change**, **Verify**, **+pts**।
+4. সেকশন শেষে Master checklist-এর Status আপডেট করুন।
+5. Launch টার্গেট: **85–90/100** (cash + real SMS + live dispatch)। bKash/Nagad ও নিজস্ব map **post-launch**।
 
-**Verdict:** Architecture and UI are a **strong prototype**. The core ride engine (book → match → live track → pay) is **mostly mock** — that is the main gap.
+```mermaid
+flowchart TD
+  S0[S0 Security and defaults]
+  S1[S1 Mobile real API]
+  S2[S2 WebSocket dispatch]
+  S3[S3 Admin live ops]
+  S4[S4 SMS FCM cash]
+  S5[S5 Tests and CI]
+  S6[S6 Staging deploy]
+  S0 --> S1 --> S2 --> S3
+  S1 --> S4
+  S2 --> S4
+  S5 --> S6
+  S4 --> S6
+```
 
-> **100% “Uber-level”** is not realistic for a small team in the short term.  
-> **85–90% = one-city beta launch** — achievable with the roadmap below.
+---
 
-### Score by context
+## Scorecard (baseline 2026-09-11)
+
+| Metric | Current | After playbook |
+|--------|---------|----------------|
+| **Overall production readiness** | **54/100** | **85–90/100** |
+| Backend API (Laravel) | 70 | 88 |
+| Mobile ↔ API | 42 | 88 |
+| Admin panel | 61 | 82 |
+| Real-time (WebSocket) | 22 | 85 |
+| Testing | 48 | 72 |
+| DevOps / deploy | 52 | 85 |
+| Security | 63 | 85 |
+| External services | 58 | 80 |
 
 | Context | Score |
 |---------|-------|
-| Production launch (real rides) | **58/100** |
-| Investor / demo pitch | **68/100** |
-| University / portfolio project | **78/100** |
-| Team learning monorepo | **82/100** |
+| Production launch (real rides) | **54/100** |
+| Investor / demo pitch | 70/100 |
+| University / portfolio | 80/100 |
 
-### Score breakdown
+**আজকের অবস্থা:** Backend ride engine আছে (**91 PHP tests pass**)। Client **default mock**। WebSocket **scaffold-only**। SMS/FCM/payment কোড আছে কিন্তু **null**। Staging deploy নেই।
 
-| Area | Score | Notes |
-|------|-------|-------|
-| Architecture & docs | 75/100 | Monorepo, PRD, ARCHITECTURE — good |
-| UI/UX (mobile + admin) | 72/100 | Uber-style flow, BN/EN, maps |
-| Backend API design | 65/100 | Routes and modules well structured |
-| Backend implementation | 55/100 | Logic exists; not fully hardened |
-| Mobile ↔ API integration | 35/100 | Auth/SOS wired; rides mock |
-| Real-time (WebSocket) | 15/100 | Events defined; server not running |
-| Testing | 28/100 | ~7 PHP, ~5 Flutter, 1 E2E |
-| DevOps / deploy | 40/100 | CI yes; staging/prod no |
-| External services | 45/100 | SMS, FCM, payment not production |
-| Security & scale | 50/100 | JWT yes; CORS open, low test coverage |
+**Evidence (2026-09-11):** `php artisan test` → 91 passed · Flutter ~26 tests · Admin Vitest ~22 (CI-তে নেই) · E2E 1 spec · `laravel/reverb` composer-এ নেই · `USE_API=false` · admin mock unless `VITE_USE_MOCK=false`।
 
 ---
 
-## Part 1 — Current State
+## Master checklist
 
-### What is strong (keep and build on)
+| Section | Goal | Est. | Score after | Status |
+|---------|------|------|-------------|--------|
+| **S0** | Security + release defaults | 3–4 days | **62** | [ ] |
+| **S1** | Mobile real ride on Laravel | 2 weeks | **72** | [ ] |
+| **S2** | WebSocket dispatch end-to-end | 1–1.5 weeks | **78** | [ ] |
+| **S3** | Admin live SOS + map | 3–4 days | **81** | [ ] |
+| **S4** | Production SMS + FCM + cash-only | 1 week | **85** | [ ] |
+| **S5** | Tests + CI gates | 1 week | **88** | [ ] |
+| **S6** | Staging deploy + monitoring | 1–2 weeks | **90** | [ ] |
 
-| Area | Status | Location |
-|------|--------|----------|
-| Monorepo structure | ✅ | `apps/`, `packages/`, `docs/` |
-| PRD + Architecture docs | ✅ | `docs/PRD.md`, `docs/ARCHITECTURE.md` |
-| Laravel REST API surface | ✅ | `apps/api/routes/api.php` |
-| JWT + OTP auth (backend) | ✅ | `AuthController`, `OtpService`, `TokenService` |
-| Ride lifecycle (backend logic) | ✅ | `RideService`, `DispatchService`, `FareService` |
-| Driver onboarding API | ✅ | `DriverController` |
-| SOS backend + guardian SMS | ✅ | `SosService` |
-| Admin API endpoints | ✅ | `AdminController` |
-| Flutter shared core | ✅ | `packages/mobile_core/` |
-| Passenger/Driver UI flows | ✅ | Mock-driven but complete UX |
-| Map + GPS integration | ✅ | `BrandedMap`, `LocationCubit`, OSM/OSRM |
-| Native driver GPS | ✅ | `BackgroundLocationService.kt`, iOS Swift |
-| CI pipeline | ✅ | `.github/workflows/ci.yml` |
-| Docker (dev) | ✅ | `infra/docker/docker-compose.yml` |
-
-### What is weak (must fix for production)
-
-| Area | Status | Impact |
-|------|--------|--------|
-| Mobile ride flow on real API | ❌ Mock | **Critical** |
-| Driver dispatch on real API | ❌ Mock | **Critical** |
-| WebSocket live updates | ❌ Not running | **Critical** |
-| SMS production gateway | ❌ Mock/logs | **Critical** |
-| Test coverage | ❌ Minimal | High |
-| Staging/production deploy | ❌ Missing | High |
-| FCM push notifications | ❌ Not built | Medium |
-| Digital payment (bKash/Nagad) | ❌ Not built | Medium (cash OK for P0) |
-| CORS locked down | ❌ `*` open | Medium |
-| Branch protection | ❌ Manual only | Medium |
+**Minimum launch (beta):** S0–S4 complete = **85/100**.  
+**Full production ops:** + S5 + S6 = **90/100**.
 
 ---
 
-## Part 2 — Tech Stack Reference
+## S0 — Security and release defaults (+8 → 62)
 
-| Layer | Stack | Where |
-|-------|-------|-------|
-| Backend | Laravel 9, PHP 8+, JWT, MySQL/SQLite, Redis | `apps/api` |
-| Passenger / Driver | Flutter, flutter_bloc, go_router, Dio | `apps/*-app`, `packages/mobile_core` |
-| Admin | React 19, Vite, Tailwind, Leaflet | `apps/admin-panel` |
-| Maps (mobile) | flutter_map, Nominatim, OSRM, CARTO tiles | `packages/mobile_core` |
-| Maps (backend fare) | Google Distance Matrix (optional key) | `FareService.php` |
-| Real-time (planned) | Laravel Reverb / Pusher / Socket.IO | Not deployed |
-| CI | GitHub Actions | `.github/workflows/ci.yml` |
-| E2E | Playwright | `test/e2e/` |
+**Goal:** Auth hardening, token restore, mock-off for staging, branch lock. S1-এর আগে শেষ করুন।
 
----
+### S0.1 Rate-limit `/auth/refresh` — +2
 
-## Part 3 — Gap Analysis (Layer by Layer)
+- [ ] **File:** [`apps/api/routes/api.php`](../apps/api/routes/api.php)
+- **Change:** `POST /auth/refresh` এখন unauthenticated ও unthrottled। যোগ করুন `->middleware('throttle:20,1')` (IP) অথবা refresh-token keyed limiter।
+- **Verify:**
+  ```bash
+  cd apps/api && php artisan test --filter=Auth
+  ```
+  নতুন টেস্ট: ২১তম refresh একই IP থেকে → `429`।
 
-### GAP 1 — Mobile app: Mock vs Real API
+### S0.2 OTP verify-এ role escalation বন্ধ — +2
 
-**Default:** `MockBackend` via `packages/mobile_core/lib/core/network/backend_factory.dart`  
-**Real API:** Only with `--dart-define=USE_API=true`, and even then partial.
+- [ ] **File:** [`apps/api/app/Http/Controllers/Api/V1/AuthController.php`](../apps/api/app/Http/Controllers/Api/V1/AuthController.php) (lines 55–57)
+- **Change:** Existing user-এ `$request->role` দিয়ে `role` আপডেট করা বন্ধ করুন। Role শুধু `firstOrCreate` create path-এ সেট হবে। Passenger→driver আলাদা onboarding/admin flow।
+- **Verify:** Feature test — existing passenger OTP verify with `role=driver` → role অপরিবর্তিত।
 
-#### Wired to Laravel ✅
+### S0.3 Ride PIN শুধু passenger-কে — +1
 
-| Feature | File | API |
-|---------|------|-----|
-| OTP request/verify | `api_backend.dart` | `POST /auth/otp/request`, `POST /auth/otp/verify` |
-| Profile patch | `api_backend.dart` | `PATCH /profile` |
-| SOS trigger/cancel | `api_backend.dart` | `POST /sos/trigger`, `POST /sos/{id}/cancel` |
-| Share link | `api_backend.dart` | `GET /rides/{id}/share-link` |
+- [ ] **File:** [`apps/api/app/Services/RideService.php`](../apps/api/app/Services/RideService.php) (`formatRide()` ~L214)
+- **Change:** `pin` শুধু ride-এর passenger (বা driver **after** they own the trip) response-এ। Public track / driver list / admin list থেকে PIN বাদ।
+- **Verify:** Public track JSON-এ `pin` নেই। Passenger `GET /rides/{id}`-এ PIN আছে।
 
-#### Still mock ❌
+### S0.4 App relaunch-এ refresh token restore — +2
 
-| Feature | File | Mock / local behavior |
-|---------|------|------------------------|
-| Vehicle types + fare | `ride_cubit.dart` | `backend.types`, `estimate()` |
-| Book ride | `ride_cubit.dart` | `createRide()`, `matchDemo()` |
-| Trip status | `ride_cubit.dart` | `advance()` |
-| Complete + rate | `ride_cubit.dart` | `confirmCash()`, `completeAndRate()` |
-| Driver go online | `driver_session_cubit.dart` | `driverOnline` flag only |
-| Driver request card | `driver_session_cubit.dart` | `spawnRequest()` timer |
-| Accept/decline/cash | `driver_session_cubit.dart` | Local state |
-| PIN verify | `driver_session_cubit.dart` | Hardcoded `4821` |
-| Driver onboarding | `onboarding_screens.dart` | `setOnboarding()` local only |
-| Emergency contacts | `profile_screens.dart` | `MockBackend.guardians` |
-| JWT refresh | — | Not implemented |
-| Driver GPS → server | — | No `POST /driver/location` |
+- [ ] **File:** [`packages/mobile_core/lib/core/session/session_cubit.dart`](../packages/mobile_core/lib/core/session/session_cubit.dart) (`restore()`, ~L65–85)
+- **Change:** `store.access` ছাড়া `store.refresh` পড়ে `backend.refresh = ...` সেট করুন। নাহলে access expire হলে 401 refresh fail → forced re-login।
+- **Also check:** [`packages/mobile_core/lib/core/network/api_backend.dart`](../packages/mobile_core/lib/core/network/api_backend.dart) `_AuthInterceptor` — retry-এর নতুন `Dio()` interceptor ছাড়া না হয়।
+- **Verify:** OTP login → kill app → reopen → 16+ min পর API call succeeds without OTP screen (or refresh path hits `/auth/refresh`).
 
-**Fix:** Extend `packages/mobile_core/lib/core/network/api_backend.dart` to override all ride/driver methods.
+### S0.5 Staging/release-এ mock বন্ধ — +1
 
----
+- [ ] **Files:**
+  - [`packages/mobile_core/lib/core/network/backend_factory.dart`](../packages/mobile_core/lib/core/network/backend_factory.dart) — release flavor/`USE_API` default documentation
+  - [`apps/admin-panel/.env.example`](../apps/admin-panel/.env.example) — `VITE_USE_MOCK=false` রাখুন (already)
+  - Root `.env.example` যদি `VITE_USE_MOCK=true` থাকে, staging-এর সাথে conflict সরাবেন
+- **Change:** Staging/prod build: `--dart-define=USE_API=true --dart-define=API_BASE_URL=https://api.YOURDOMAIN/api/v1`। Admin `.env`: `VITE_USE_MOCK=false`।
+- **Verify:** Staging admin login uses Laravel, not demo mock. Passenger release APK `ApiBackend` instantiates (log/debug flag).
 
-### GAP 2 — Real-time (WebSocket)
+### S0.6 Branch protection on `main` — +0 (process)
 
-Designed but not operational.
+- [ ] **Files:** [`scripts/setup-branch-protection.ps1`](../scripts/setup-branch-protection.ps1), [`docs/BRANCH_PROTECTION.md`](BRANCH_PROTECTION.md)
+- **Change:** `gh auth login` তারপর script চালান। CI check names: `Laravel API`, `Admin panel`, `Flutter analyze + test`, `Admin E2E smoke`।
+- **Verify:** GitHub → Settings → Branches → `main` ruleset exists. Direct push as collaborator fails.
 
-| Component | File | Status |
-|-----------|------|--------|
-| Broadcast events | `apps/api/app/Events/RideDispatched.php` | ✅ Code exists |
-| Channel routes | `apps/api/routes/channels.php` | ✅ Defined |
-| Socket event constants | `packages/shared-types/src/socket-events.ts` | ✅ Synced |
-| BroadcastServiceProvider | `apps/api/config/app.php` | ❌ Commented out |
-| Reverb / Socket.IO server | — | ❌ Not installed |
-| Docker WS container | `infra/docker/docker-compose.yml` | ❌ Missing |
-| Mobile socket client | `pubspec.yaml` has `socket_io_client` | ❌ Zero usage |
-| Admin live updates | `useSosPolling.ts` | ⚠️ 5s HTTP poll only |
-
-**Without this:** Driver offers and passenger “driver found” rely on fake timers.
+**S0 done when:** refresh throttled, role lock, PIN gated, session restore works, staging env mock-off, `main` protected.
 
 ---
 
-### GAP 3 — Backend: built but not fully connected
+## S1 — Mobile real ride engine (+10 → 72)
 
-| Issue | Detail |
-|-------|--------|
-| Queue worker | `DispatchTimeoutJob` needs `queue:work` — not in Docker |
-| Scheduler | `ReleaseHeldPayoutJob` hourly — no cron in compose |
-| Document upload | `uploadDocument()` expects URL, not file — no S3 |
-| Google fare lock | Optional — falls back to Haversine without key |
-| FCM | Token store exists; no send service |
-| Payment | Cash only in `PaymentService.php` |
+**Goal:** Book → accept → PIN → cash **Laravel DB-তে persist** হয়। Mock timer নয়। এটা সবচেয়ে বড় gap।
 
-#### Laravel API routes (reference)
+Default আজ: `MockBackend` (`USE_API=false`). `ApiBackend` আংশিক আছে; নিচের gap গুলো বাকি।
 
-Base: `http://localhost:8000/api/v1`
+### S1.1 Fare UI server estimate ব্যবহার করে — +2
 
-**Public:** `/health`, `/public/track/{token}`, `/auth/otp/*`, `/auth/admin/login`, `/rides/vehicle-types`
+- [ ] **Files:**
+  - [`packages/mobile_core/lib/core/ride/ride_cubit.dart`](../packages/mobile_core/lib/core/ride/ride_cubit.dart) (`breakdownFor()` ~L193)
+  - [`packages/mobile_core/lib/core/network/api_backend.dart`](../packages/mobile_core/lib/core/network/api_backend.dart) (`fetchEstimate()` ~L290)
+- **Change:** `ApiBackend` হলে `breakdownFor` local formula বাদ দিয়ে `fetchEstimate()` / `GET|POST /rides/estimate` ব্যবহার করুন।
+- **Verify:** Pickup/drop set → fare matches API estimate (not local `type.estimateBdt` only).
 
-**Authenticated:** `/profile`, `/rides/*`, `/driver/*`, `/sos/*`, `/admin/*`
+### S1.2 `_mapRide()` এ `driverPoint` — +2
 
-Full list: `apps/api/routes/api.php`
+- [ ] **File:** [`packages/mobile_core/lib/core/network/api_backend.dart`](../packages/mobile_core/lib/core/network/api_backend.dart) (`_mapRide()` ~L757)
+- **Change:** API `driver.lat/lng` বা location payload থেকে `Ride.driverPoint` (`LatLng`) ম্যাপ করুন। Tracking screen এখন API mode-এ live marker পায় না।
+- **Verify:** `USE_API=true` → tracking map shows driver marker after accept.
 
----
+### S1.3 Trip history API — +2
 
-### GAP 4 — Admin panel
+- [ ] **Files:**
+  - [`packages/mobile_core/lib/core/network/api_backend.dart`](../packages/mobile_core/lib/core/network/api_backend.dart) — `GET /rides` hydrate `history`
+  - [`packages/mobile_core/lib/features/passenger/finding_history.dart`](../packages/mobile_core/lib/features/passenger/finding_history.dart)
+  - [`packages/mobile_core/lib/features/passenger/shell_screens.dart`](../packages/mobile_core/lib/features/passenger/shell_screens.dart) (~L371)
+- **Change:** History screens `backend.history` mock list পড়ে। API mode-এ `GET /rides` থেকে populate করুন (pull-to-refresh)।
+- **Verify:** Complete one cash ride → history screen shows that trip after cold start.
 
-| Mode | Default | Issue |
-|------|---------|-------|
-| Mock | `VITE_USE_MOCK !== "false"` | Demo data, hardcoded login |
-| Real API | `VITE_USE_MOCK=false` | Dashboard, drivers, SOS work |
+### S1.4 Hardcoded PIN শুধু mock-এ — +1
 
-**Missing:**
+- [ ] **Files:**
+  - [`packages/mobile_core/lib/core/driver/driver_session_cubit.dart`](../packages/mobile_core/lib/core/driver/driver_session_cubit.dart) (`verifyRidePin`)
+  - [`packages/mobile_core/lib/core/config/static_test_user.dart`](../packages/mobile_core/lib/core/config/static_test_user.dart) (`4821` mock-only)
+- **Change:** API mode-এ driver PIN = passenger-কে দেখানো server PIN। `4821` শুধু `MockBackend` / QA hydrate।
+- **Verify:** Real ride PIN from API works; `4821` fails unless mock.
 
-- KYC pending queue UI (`GET /admin/kyc/pending` — API exists)
-- WebSocket SOS (polling only)
-- CI/E2E always runs mock (`playwright.config.ts`)
-- Hardcoded demo credentials in `apps/admin-panel/src/api/client.ts`
+### S1.5 Polling fallback (until S2) — +1
 
----
+- [ ] **Files:**
+  - [`packages/mobile_core/lib/core/ride/ride_cubit.dart`](../packages/mobile_core/lib/core/ride/ride_cubit.dart) (`matchDemoApi`)
+  - [`packages/mobile_core/lib/core/driver/driver_session_cubit.dart`](../packages/mobile_core/lib/core/driver/driver_session_cubit.dart) (`pollForIncomingRequest` ~L242)
+- **Change:** Socket আসার আগে HTTP poll **reliable** রাখুন: passenger poll `GET /rides/{id}` until assigned; driver poll `GET /driver/incoming` every 2–3s while online. Mock `spawnRequest()` / `matchDemo()` API mode-এ **call করবেন না**।
+- **Verify:** Two emulators, `USE_API=true`: passenger books → driver sees offer within 5s without mock timer.
 
-### GAP 5 — Testing
+### S1.6 Release define `USE_API=true` — +2
 
-| Layer | Count | Gap |
-|-------|-------|-----|
-| PHP unit/feature | ~7 tests | No auth/ride/dispatch HTTP tests |
-| Flutter | ~5 tests | CI runs `flutter analyze` only, not `flutter test` |
-| E2E Playwright | 1 test | Admin mock login only |
-| Mobile E2E | 0 | — |
-| Load / security test | 0 | — |
+- [ ] **Files:** passenger/driver Android/iOS build configs, CI release job (add when you have one), [`backend_factory.dart`](../packages/mobile_core/lib/core/network/backend_factory.dart)
+- **Change:** Production/staging APK/IPA:
+  ```bash
+  flutter build apk --dart-define=USE_API=true --dart-define=API_BASE_URL=https://api.YOURDOMAIN/api/v1
+  ```
+  Emulator: `API_BASE_URL=http://10.0.2.2:8000/api/v1`
+- **Verify:** Release build log / debug pill shows API backend, not mock.
 
-**Test files:**
-
-- `apps/api/tests/Unit/FareServiceTest.php`
-- `apps/api/tests/Unit/SosServiceTest.php`
-- `packages/mobile_core/test/mobile_core_test.dart`
-- `test/e2e/specs/admin-login.spec.ts`
-
----
-
-### GAP 6 — Infrastructure & deploy
-
-| Item | Status |
-|------|--------|
-| Local Docker (MySQL, Redis, API) | ✅ Dev only |
-| Production Dockerfile | ⚠️ PHP 8.0 (CI uses 8.2) |
-| Nginx + TLS | ❌ |
-| Staging environment | ❌ |
-| Deploy workflow | ❌ |
-| Monitoring (Sentry, etc.) | ❌ |
-| Secrets management | ❌ |
-| Android release signing | ❌ TODO in Gradle |
+**S1 done when:** Full emulator ride — book → accept → PIN → cash — rows in Laravel `rides` + `transactions`. No `MockBackend` timers.
 
 ---
 
-### GAP 7 — External services (paid vs free)
+## S2 — Real-time dispatch (+6 → 78)
 
-| Service | Dev | Production |
-|---------|-----|------------|
-| Laravel API | Self-hosted | VPS/cloud |
-| Nominatim (OSM) | Free | Rate-limited; own server at scale |
-| OSRM public demo | Free | Not for heavy production |
-| CARTO map tiles | Free tier | Commercial license at scale |
-| Google Maps deep link | Free | No key needed |
-| Google Distance Matrix | Optional | Paid (~$5/1000 req) |
-| SMS gateway | Mock/log | **Paid** (~৳0.25–1/SMS) |
-| FCM | — | Free (Google) |
-| bKash / Nagad | — | Merchant + transaction fees |
+**Goal:** Driver offer **~2s-এর মধ্যে WebSocket**-এ আসে। Poll শুধু fallback।
 
-**Minimum launch cost:** SMS gateway + VPS (~$10–20/month) + optional Google Maps key.
+### S2.1 Install Laravel Reverb — +2
 
----
+- [ ] **Files:** [`apps/api/composer.json`](../apps/api/composer.json), [`apps/api/.env.example`](../apps/api/.env.example), [`infra/docker/docker-compose.yml`](../infra/docker/docker-compose.yml) (`ws` service already defined)
+- **Change:**
+  ```bash
+  cd apps/api
+  composer require laravel/reverb
+  php artisan reverb:install
+  ```
+  `.env`: `BROADCAST_DRIVER=reverb` (duplicate pusher vs log keys এক করে দিন)। Docker `ws` command `php artisan reverb:start` কাজ করবে।
+- **Verify:**
+  ```bash
+  docker compose -f infra/docker/docker-compose.yml up -d ws
+  docker logs bdride-ws
+  ```
+  Container stays up. `php artisan test --filter=Broadcast` still green.
 
-### GAP 8 — Security
+### S2.2 Wire mobile socket services into cubits — +3
 
-| Item | Status |
-|------|--------|
-| JWT + Redis blacklist | ✅ |
-| OTP rate limit | ✅ |
-| Admin login throttle | ✅ |
-| CORS | ❌ `allowed_origins: ['*']` in `config/cors.php` |
-| Branch protection on `main` | ❌ Not enforced |
-| OTP logged in local | ⚠️ Dev only — disable in prod |
-| Mock admin passwords in client | ⚠️ Remove for prod |
-| Broadcast auth | ❌ Provider disabled |
+- [ ] **Files:**
+  - [`packages/mobile_core/lib/realtime/pusher_client.dart`](../packages/mobile_core/lib/realtime/pusher_client.dart) (exists + tests)
+  - [`apps/passenger-app/lib/services/socket_service.dart`](../apps/passenger-app/lib/services/socket_service.dart) (**unused today**)
+  - [`apps/driver-app/lib/services/socket_service.dart`](../apps/driver-app/lib/services/socket_service.dart) (**unused today**)
+  - [`packages/mobile_core/lib/main_shared.dart`](../packages/mobile_core/lib/main_shared.dart)
+  - `RideCubit` / `DriverSessionCubit`
+- **Change:** Login-এর পর `private-user.{id}` + `private-ride.{id}` subscribe। Events: `server:ride:dispatched`, `RideStatusChanged`, `DriverLocationUpdated`। Driver cubit offer card socket থেকে; passenger tracking driver point socket থেকে। Poll 30s health-check only.
+- **Env:** `REVERB_WS_URL`, `REVERB_APP_KEY` (dart-define বা `.env`).
+- **Verify:** Book ride with Reverb running → driver offer < 2s, no poll required. Disconnect WS → poll still recovers.
 
----
+### S2.3 Broadcast gaps: PIN + cash confirm — +1
 
-## Part 4 — Roadmap to Production
+- [ ] **Files:**
+  - [`apps/api/app/Services/RideService.php`](../apps/api/app/Services/RideService.php) (`verifyPin()` ~L141 — direct `$ride->update()`, no `RideStatusChanged`)
+  - [`apps/api/app/Services/PaymentService.php`](../apps/api/app/Services/PaymentService.php) (`confirmCash()`)
+- **Change:** Status change `transition()` বা explicit `RideStatusChanged` event। Passenger map/status pill real-time আপডেট হয়।
+- **Verify:** `BroadcastEventsTest` covers pin-verify + cash-confirm payloads. Manual: passenger sees `in_progress` without refresh.
 
-### Phase 0 — Foundation (Week 1–2) → 58 → 65
+### S2.4 FCM on dispatch (hook; credentials in S4) — included
 
-**Goal:** Stable dev, security basics, honest CI.
+- [ ] **New listener** e.g. `app/Listeners/SendDriverPushNotification.php` on `RideDispatched` → `FcmService::send(...)`.
+- **Verify:** With `FCM_DEFAULT_PROVIDER=null`, log shows send attempt. Real send in S4.
 
-| # | Task | Where | Owner |
-|---|------|-------|-------|
-| 0.1 | Enable branch protection on `main` | GitHub / `scripts/setup-branch-protection.ps1` | Owner |
-| 0.2 | Wire `CORS_ALLOWED_ORIGINS` | `apps/api/config/cors.php` | Backend |
-| 0.3 | Align Docker PHP 8.2 with CI | `apps/api/Dockerfile` | Backend |
-| 0.4 | Add `queue:work` + scheduler to Docker | `infra/docker/docker-compose.yml` | Backend |
-| 0.5 | Admin `VITE_USE_MOCK=false` on staging | `apps/admin-panel/.env` | Frontend |
-| 0.6 | Add `flutter test` to CI | `.github/workflows/ci.yml` | Frontend |
-| 0.7 | Remove hardcoded mock admin creds from prod | `admin-panel/src/api/client.ts` | Frontend |
-
----
-
-### Phase 1 — Core ride engine (Week 3–6) → 65 → 78
-
-**Goal:** Real ride end-to-end on API — no mock for booking.
-
-#### 1A — Passenger API wiring
-
-| # | Task | File(s) |
-|---|------|---------|
-| 1.1 | `GET /rides/vehicle-types` | `api_backend.dart`, `ride_cubit.dart` |
-| 1.2 | `GET /rides/estimate` | `api_backend.dart` |
-| 1.3 | `POST /rides` | `api_backend.dart` |
-| 1.4 | Match via poll or WS — replace `matchDemo()` | `ride_cubit.dart` |
-| 1.5 | Ride status from API — replace `advance()` | `api_backend.dart` |
-| 1.6 | `POST /rides/{id}/cancel` | `api_backend.dart` |
-| 1.7 | `POST /rides/{id}/rate` + cash flow | `api_backend.dart` |
-| 1.8 | `USE_API=true` in release builds | App build config, CI |
-
-#### 1B — Driver API wiring
-
-| # | Task | File(s) |
-|---|------|---------|
-| 1.9 | `POST /driver/availability` | `api_backend.dart`, `driver_session_cubit.dart` |
-| 1.10 | `POST /driver/location` every 3–5s | `api_backend.dart`, `location_cubit.dart` |
-| 1.11 | Dispatch offer via WS/poll — replace `spawnRequest()` | `driver_session_cubit.dart` |
-| 1.12 | `POST /rides/{id}/accept`, `decline` | `api_backend.dart` |
-| 1.13 | `arrived`, `pin/verify`, `cash-confirm` | `api_backend.dart` |
-| 1.14 | Remove hardcoded PIN `4821` | `driver_session_cubit.dart` |
-| 1.15 | `GET /driver/earnings` | `api_backend.dart` |
-
-#### 1C — Driver onboarding
-
-| # | Task | File(s) |
-|---|------|---------|
-| 1.16 | Wire `/driver/personal`, `/vehicle`, `/documents`, `/submit` | `onboarding_screens.dart`, `api_backend.dart` |
-| 1.17 | Object storage (S3/R2) + multipart upload | `DriverController`, new `StorageService` |
-
-**Done when:** Full ride on emulator — book → accept → PIN → cash — all persisted in Laravel DB.
+**S2 done when:** Driver online → passenger books → offer on driver UI via WS within ~2s.
 
 ---
 
-### Phase 2 — Real-time (Week 7–8) → 78 → 85
+## S3 — Admin live ops (+3 → 81)
 
-| # | Task | Where |
-|---|------|-------|
-| 2.1 | Install Laravel Reverb or Soketi | `apps/api/composer.json` |
-| 2.2 | Enable `BroadcastServiceProvider` | `config/app.php` |
-| 2.3 | Add WS server to Docker | `infra/docker/` |
-| 2.4 | Mobile socket client | New `socket_service.dart` |
-| 2.5 | Listen: `RideDispatched`, location, SOS | Cubits |
-| 2.6 | Admin: WebSocket SOS | Replace `useSosPolling.ts` |
-| 2.7 | Passenger live driver marker | `tracking_screen.dart` |
+**Goal:** Ops team mock ছাড়া live SOS + map দেখে।
 
-**Done when:** Driver online → passenger books → driver gets offer within ~2s without manual refresh.
+### S3.1 Mount `useSosRealtime` — +2
 
----
+- [ ] **Files:**
+  - [`apps/admin-panel/src/hooks/useSosRealtime.ts`](../apps/admin-panel/src/hooks/useSosRealtime.ts) (exists, **not imported**)
+  - [`apps/admin-panel/src/components/layout/AppShell.tsx`](../apps/admin-panel/src/components/layout/AppShell.tsx)
+  - [`apps/admin-panel/src/realtime/realtimeClient.ts`](../apps/admin-panel/src/realtime/realtimeClient.ts)
+- **Change:** AppShell-এ `useSosRealtime(getToken())` mount করুন। Poll (`useSosPolling`, 5s) **fallback** রাখুন যদি Reverb down থাকে।
+- **Env:** `VITE_REVERB_URL`, `VITE_REVERB_APP_KEY`, `VITE_SOCKET_URL`.
+- **Verify:** Trigger SOS from passenger app → admin banner updates without waiting 5s poll.
 
-### Phase 3 — Production services (Week 9–10) → 85 → 88
+### S3.2 Live map refresh — +1
 
-| # | Task | Detail |
-|---|------|--------|
-| 3.1 | SMS gateway (SSL Wireless / GreenWeb / Twilio) | `SMS_GATEWAY_*` in `.env` |
-| 3.2 | Stop logging OTP outside local | `OtpService.php` |
-| 3.3 | FCM: `FcmService` + mobile `firebase_messaging` | Dispatch + SOS push |
-| 3.4 | JWT refresh on 401 | `api_backend.dart` Dio interceptor |
-| 3.5 | Google Maps key for fare lock | `GOOGLE_MAPS_API_KEY` |
-| 3.6 | Emergency contacts API | `profile_screens.dart` |
-| 3.7 | Admin KYC pending page | New admin route |
+- [ ] **File:** [`apps/admin-panel/src/pages/LiveMapPage.tsx`](../apps/admin-panel/src/pages/LiveMapPage.tsx)
+- **Change:** এখন one-shot REST। অন্তত 5–10s poll `GET /admin/drivers` + `/admin/rides`, অথবা `DriverLocationUpdated` WS।
+- **Verify:** Driver moves → admin map marker updates within 10s.
 
----
+### S3.3 Staging admin mock off — (S0.5 repeat)
 
-### Phase 4 — Quality & deploy (Week 11–12) → 88 → 90+
+- [ ] Confirm staging `.env`: `VITE_USE_MOCK=false`, `VITE_API_URL=https://api.YOURDOMAIN/api/v1`.
+- **Verify:** Login is `admin@bdride.share` against Laravel, not demo handler.
 
-#### Minimum tests to add
-
-| Area | Tests |
-|------|-------|
-| API Feature | Auth OTP, create ride, accept, PIN, cancel, SOS |
-| API Unit | DispatchService, PaymentService, LocationService |
-| Flutter | RideCubit with mocked HTTP |
-| E2E | Admin real login, one ride smoke |
-| Load | 50 concurrent ride requests |
-
-#### Deploy checklist
-
-| # | Task |
-|---|------|
-| 4.1 | Staging server (DigitalOcean / AWS / etc.) |
-| 4.2 | Nginx + TLS (Let's Encrypt) |
-| 4.3 | Production MySQL + Redis |
-| 4.4 | GitHub Actions deploy workflow |
-| 4.5 | Error monitoring (Sentry) |
-| 4.6 | Android release signing + Play internal track |
-| 4.7 | iOS TestFlight (if Mac available) |
-| 4.8 | Runbook: backup, rollback, on-call |
+**S3 done when:** KYC queue (already) + live SOS + map usable on real API.
 
 ---
 
-### Phase 5 — Scale & payment (post-launch) → 90 → 95+
+## S4 — Production SMS, FCM, cash-only (+4 → 85)
 
-| # | Task |
-|---|------|
-| 5.1 | bKash / Nagad merchant integration |
-| 5.2 | Own OSRM or Google Directions |
-| 5.3 | Own Nominatim or Google Places |
-| 5.4 | Multi-city service zones |
-| 5.5 | Analytics dashboard |
-| 5.6 | Security / penetration audit |
+**Goal:** Real OTP SMS। Push optional but wired। Beta = **cash only**।
 
----
+Gateway **code already exists** (`Sms/`, `Fcm/`, `Payment/`). Default সব `null`।
 
-## Part 5 — File-by-File Fix Map
+### S4.1 SSL Wireless production credentials — +2
 
-```
-packages/mobile_core/
-├── lib/core/network/
-│   ├── api_backend.dart          ← EXTEND: rides, driver, guardians, refresh
-│   ├── mock_backend.dart         ← Keep for offline demo only
-│   └── backend_factory.dart      ← USE_API=true in production
-├── lib/core/ride/ride_cubit.dart
-├── lib/core/driver/driver_session_cubit.dart
-├── lib/features/driver/onboarding_screens.dart
-├── lib/features/profile/profile_screens.dart
-└── lib/core/socket/ (NEW)        ← WebSocket client
+- [ ] **Files:** [`apps/api/.env`](../apps/api/.env.example) (`SMS_DEFAULT_PROVIDER`, `SMS_PROVIDERS_SSL_WIRELESS_*`), [`apps/api/app/Services/Sms/SslWirelessGateway.php`](../apps/api/app/Services/Sms/SslWirelessGateway.php)
+- **Change:** Staging/prod: `SMS_DEFAULT_PROVIDER=ssl_wireless` + SID/token/masking। Local: `null` (OTP log)। OTP log **শুধু `local`/`testing`**।
+- **Verify:**
+  ```bash
+  cd apps/api && php artisan test --filter=SmsGateway
+  ```
+  Manual: real phone `POST /auth/otp/request` → SMS arrives; OTP not in prod logs.
 
-apps/api/
-├── config/app.php                ← Enable BroadcastServiceProvider
-├── config/cors.php               ← Lock origins
-├── app/Services/FcmService.php   ← NEW
-├── app/Services/StorageService.php ← NEW (S3/R2)
-└── routes/channels.php
+### S4.2 Invoke FCM from dispatch + SOS — +1
 
-apps/admin-panel/
-├── src/api/client.ts
-├── src/hooks/useSosSocket.ts     ← NEW
-└── src/pages/KycPendingPage.tsx  ← NEW
+- [ ] **Files:** `SendDriverPushNotification` listener (S2.4), [`apps/api/app/Services/SosService.php`](../apps/api/app/Services/SosService.php), [`apps/api/app/Services/Fcm/FirebaseFcmService.php`](../apps/api/app/Services/Fcm/FirebaseFcmService.php)
+- **Change:** `FCM_DEFAULT_PROVIDER=firebase` + service account on staging. Device token: `POST /auth/device-token` (already on routes) from Flutter.
+- **Verify:** Background driver receives offer push. SOS → admin/driver push (as designed). Tests: `FcmServiceTest` still pass with null.
 
-infra/docker/
-├── docker-compose.yml            ← + reverb, queue worker, scheduler
-└── docker-compose.prod.yml       ← NEW
+### S4.3 Cash-only beta; reject digital methods until endpoints exist — +1
 
-.github/workflows/
-├── ci.yml                        ← + flutter test, API feature tests
-└── deploy-staging.yml            ← NEW
-```
+- [ ] **File:** [`apps/api/app/Http/Controllers/Api/V1/RideController.php`](../apps/api/app/Http/Controllers/Api/V1/RideController.php) (`store`)
+- **Change:** `payment_method` allow `cash` only for beta। `bkash`/`nagad`/`wallet`/`card` → `422` until `POST /rides/{id}/pay` exists (post-launch).
+- **Verify:** Create ride with `bkash` → 422. Cash confirm path unchanged (`RideLifecycleTest`).
+
+**S4 done when:** Real OTP SMS works; cash ride completes; no fake digital payment.
+
+**Minimum launch gate:** S0–S4 = **85/100**.
 
 ---
 
-## Part 6 — Team Responsibility Matrix
+## S5 — Tests and CI (+3 → 88)
 
-| Phase | Backend | Frontend (Mobile + Admin) | QA |
-|-------|---------|---------------------------|-----|
-| 0 | CORS, Docker, queue | CI flutter test, admin env | Verify CI |
-| 1 | API bugs, dispatch edge cases | Wire `api_backend.dart` | Full ride manual + auto |
-| 2 | Reverb, broadcast auth | Socket clients | Live dispatch test |
-| 3 | SMS, FCM, S3 | FCM, guardians UI | Real SMS OTP test |
-| 4 | Deploy, monitoring | Store builds | Go/no-go checklist |
+**Goal:** Regression ধরে রাখা যাতে S1–S4 ভাঙে না।
+
+### S5.1 PHP feature gaps — +1
+
+- [ ] **Dir:** [`apps/api/tests/Feature/`](../apps/api/tests/Feature/)
+- **Add tests:**
+  - Refresh throttle + logout blacklist
+  - SOS HTTP trigger/cancel/resolve + `sms_status`
+  - Dispatch timeout → `no_driver_available` (`DispatchTimeoutJob`)
+  - Admin KYC approve/reject
+  - Public track **does not** include PIN
+- **Verify:** `cd apps/api && php artisan test` — all green (target 110+ tests).
+
+### S5.2 Flutter cubit / ApiBackend tests — +1
+
+- [ ] **Dir:** [`packages/mobile_core/test/`](../packages/mobile_core/test/)
+- **Add:** `ApiBackend` mapping (`_mapRide` driverPoint), `RideCubit` estimate path, `SessionCubit.restore` refresh token (mocked store). Placeholder `apps/*/test/widget_test.dart` (`1+1=2`) replace or skip.
+- **Verify:** `cd packages/mobile_core && flutter test`
+
+### S5.3 CI: Vitest + lint + E2E env — +1
+
+- [ ] **Files:**
+  - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
+  - [`test/e2e/playwright.config.ts`](../test/e2e/playwright.config.ts)
+- **Change:**
+  - Job: `pnpm --filter admin-panel test` and `pnpm lint:admin`
+  - E2E: `VITE_QA_PASSWORD: "123456"` (mock login today requires it in `client.ts`)
+- **Verify:** Push to a branch → all four CI jobs + new vitest green.
+
+**S5 done when:** CI fails if ride lifecycle, OTP, or admin KYC regressions land.
 
 ---
 
-## Part 7 — Definition of Done
+## S6 — Staging deploy (+2 → 90)
 
-### Minimum launch (85/100) — one-city beta
+**Goal:** একটা public HTTPS URL যেখানে real API + admin + Reverb চলে।
 
-- [ ] Real OTP via SMS gateway
+### S6.1 Production compose — +1
+
+- [ ] **New:** `infra/docker/docker-compose.prod.yml`
+- **Change:** No bind-mounts. `APP_DEBUG=false`. Secrets via env file / Docker secrets. Healthchecks: mysql `mysqladmin ping`, redis `redis-cli ping`, api `curl /api/v1/health`. Fix Dockerfile: remove `composer install || true`; do **not** use `php artisan serve` in prod (php-fpm + Caddy/nginx, or Octane).
+- **Verify:** `docker compose -f infra/docker/docker-compose.prod.yml up -d` → `GET https://staging.../api/v1/health` 200.
+
+### S6.2 TLS reverse proxy — +0.5
+
+- [ ] Caddy or Nginx: `api.`, `admin.`, `ws.` hostnames. WSS to Reverb `:8080`.
+- **Verify:** Browser admin over HTTPS. Flutter `wss://` connects.
+
+### S6.3 Deploy workflow + Sentry — +0.5
+
+- [ ] **New:** `.github/workflows/deploy-staging.yml` — build images, migrate `--force`, curl health.
+- [ ] Sentry DSN: Laravel + admin + (optional) Flutter.
+- **Verify:** Merge to `staging` branch deploys. Fake 500 appears in Sentry.
+
+**S6 done when:** Staging URL + TLS + health + one real OTP + one cash ride documented in a runbook.
+
+---
+
+## Definition of done
+
+### Minimum launch — 85/100 (one-city beta)
+
+- [ ] Real OTP via SSL Wireless
 - [ ] Passenger book → driver accept → PIN → cash on Laravel DB
-- [ ] Driver location POST every ~5s when online
-- [ ] WebSocket dispatch (or reliable poll &lt; 3s)
+- [ ] Driver location to server when online
+- [ ] WebSocket dispatch (or reliable poll &lt; 3s if WS blip)
 - [ ] Admin live SOS + resolve
-- [ ] Staging deployed with TLS
-- [ ] 20+ API feature tests passing
-- [ ] CORS locked, branch protection on
-- [ ] No mock backend in production builds
+- [ ] CORS locked, branch protection on, `APP_DEBUG=false`
+- [ ] No `MockBackend` in production builds
+- [ ] Cash-only (digital methods rejected)
 
-### Full production (90+/100)
+### Full production ops — 90/100
 
 - [ ] Above + FCM push
-- [ ] Above + 50+ tests, load test passed
-- [ ] Above + monitoring/alerting
-- [ ] Above + Play Store internal track
-- [ ] Above + runbook + backup
+- [ ] Staging HTTPS + deploy workflow
+- [ ] Sentry
+- [ ] CI includes admin vitest + extra PHP/Flutter tests
+- [ ] Runbook: backup, rollback, on-call
 
-### Industry leader (95–100) — long term
+### Post-launch (95+) — এই playbook-এর বাইরে
 
-- Digital payments live
-- Own map/routing infrastructure
-- Multi-city operations
-- 99.9% uptime SLA
-- Security audit passed
-- Bangladesh ride-hailing compliance
+- bKash / Nagad `POST /rides/{id}/pay`
+- Own OSRM / Nominatim (replace `router.project-osrm.org`)
+- Play Store internal track + iOS TestFlight
+- Penetration test, multi-city zones
 
 ---
 
-## Part 8 — This week priority list
+## File map (quick)
 
-| Priority | Action | Est. impact |
-|----------|--------|-------------|
-| **#1** | Wire `createRide`, `accept`, `advance` in `api_backend.dart` | +15 pts |
-| **#2** | Wire `POST /driver/location` + `availability` | +8 pts |
-| **#3** | Queue worker in Docker | +5 pts |
-| **#4** | SMS gateway account + `.env` | +5 pts |
-| **#5** | 10 API feature tests | +5 pts |
-| **#6** | Reverb + enable broadcast | +10 pts |
-| **#7** | Staging deploy script | +5 pts |
+```
+packages/mobile_core/lib/
+  core/network/backend_factory.dart     S0.5, S1.6  — USE_API=true
+  core/network/api_backend.dart         S1.1–S1.3  — estimate, _mapRide, history, Dio retry
+  core/session/session_cubit.dart       S0.4       — restore refresh
+  core/ride/ride_cubit.dart             S1.1, S1.5, S2.2
+  core/driver/driver_session_cubit.dart S1.4, S1.5, S2.2
+  realtime/pusher_client.dart           S2.2
+apps/passenger-app/lib/services/socket_service.dart   S2.2 wire
+apps/driver-app/lib/services/socket_service.dart      S2.2 wire
+apps/api/
+  routes/api.php                        S0.1 throttle refresh
+  app/Http/Controllers/Api/V1/AuthController.php   S0.2
+  app/Services/RideService.php          S0.3 PIN, S2.3 verifyPin broadcast
+  app/Services/PaymentService.php       S2.3 cash broadcast
+  composer.json                         S2.1 reverb
+  Dockerfile                            S6.1
+apps/admin-panel/src/
+  components/layout/AppShell.tsx        S3.1
+  hooks/useSosRealtime.ts               S3.1
+  pages/LiveMapPage.tsx                 S3.2
+infra/docker/docker-compose.yml         S2.1 ws
+infra/docker/docker-compose.prod.yml    S6.1 NEW
+.github/workflows/ci.yml                S5.3
+.github/workflows/deploy-staging.yml    S6.3 NEW
+test/e2e/playwright.config.ts           S5.3 VITE_QA_PASSWORD
+scripts/setup-branch-protection.ps1     S0.6
+```
 
 ---
 
-## Part 9 — Local dev quick reference
+## Local dev quick reference
 
 | Service | URL | Login |
 |---------|-----|-------|
@@ -501,29 +436,36 @@ infra/docker/
 | Admin | http://127.0.0.1:5173 | `admin@bdride.share` / `Admin@12345` |
 | Passenger web | http://127.0.0.1:5174 | `0152170004` / OTP `123456` |
 | Driver web | http://127.0.0.1:5175 | Same QA user (driver role) |
+| Reverb WS | http://127.0.0.1:8080 | Docker `ws` (needs `laravel/reverb`) |
 
-**Flutter real API:**
+**Flutter real API (emulator):**
 
 ```bash
 cd apps/passenger-app
 flutter run --dart-define=USE_API=true --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
 ```
 
----
+**API tests:**
 
-## Appendix A — Related docs
-
-- [PRD.md](./PRD.md) — Product requirements
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — System design
-- [CONTRIBUTING.md](./CONTRIBUTING.md) — Team workflow
-- [BRANCH_PROTECTION.md](./BRANCH_PROTECTION.md) — GitHub rules
+```bash
+cd apps/api && php artisan test
+```
 
 ---
 
-## Appendix B — One-line verdict
+## Related docs
 
-> **Foundation is solid and not throw-away work. Production score today is 58/100 because the client layer still runs on mocks for the core ride path. With ~12 weeks focused work on API wiring, WebSockets, SMS, tests, and deploy, an 85/100 one-city beta is realistic.**
+- [PRD.md](./PRD.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
+- [BRANCH_PROTECTION.md](./BRANCH_PROTECTION.md)
+- [README.md](../README.md)
 
 ---
 
-*Report generated for Pothik MRM team internal use. Update this file as phases complete.*
+## One-line verdict
+
+> **আজ 54/100। এই playbook S0–S4 শেষ করলে 85/100 one-city beta (real OTP + real ride + WS)। S5–S6 দিয়ে 90/100 staging ops। bKash/maps পরে।**
+
+*Playbook v2.0 — 2026-09-11. Checkbox টিক করুন যখন Verify পাস হয়।*
