@@ -19,6 +19,9 @@ class HealthCheckTest extends TestCase
 {
     public function test_returns_200_when_db_and_redis_are_up(): void
     {
+        // CI runners do not always have a Redis server — mock a healthy ping.
+        Redis::shouldReceive('ping')->once()->andReturn(true);
+
         $resp = $this->getJson('/api/v1/health');
 
         // ApiResponse::success wraps the body under `data.*`, not at the root.

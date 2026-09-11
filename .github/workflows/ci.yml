@@ -10,6 +10,16 @@ jobs:
   api:
     name: Laravel API
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: apps/api
@@ -18,7 +28,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: mbstring, pdo_sqlite, redis
+          extensions: mbstring, pdo_sqlite, redis, curl
           coverage: none
       - name: Install Composer deps
         run: composer install --no-interaction --prefer-dist
@@ -31,6 +41,8 @@ jobs:
           sed -i 's/CACHE_DRIVER=redis/CACHE_DRIVER=array/' .env
           sed -i 's/QUEUE_CONNECTION=redis/QUEUE_CONNECTION=sync/' .env
           echo "DB_DATABASE=$(pwd)/database/database.sqlite" >> .env
+          echo "REDIS_HOST=127.0.0.1" >> .env
+          echo "REDIS_PORT=6379" >> .env
           touch database/database.sqlite
           php artisan migrate --force
       - name: Run tests
@@ -42,6 +54,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -87,6 +101,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
