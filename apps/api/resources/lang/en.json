@@ -1,0 +1,19 @@
+{
+    "SOS only available during an active ride.": "SOS only available during an active ride.",
+    "SOS only available while you are online.": "SOS only available while you are online.",
+    "Emergency alert body": "EMERGENCY - :name triggered SOS.\nRide: :ride | Time: :time\nDriver: :driver | Vehicle: :plate\nLive location: :url\nPlease contact immediately.",
+    "Try again in a moment.": "Try again in a moment.",
+    "OTP expired. Please request a new one.": "OTP expired. Please request a new one.",
+    "OTP attempt limit reached.": "OTP attempt limit reached.",
+    "Wrong OTP. :remaining attempts remaining.": "Wrong OTP. :remaining attempts remaining.",
+    "Please enter a valid Bangladeshi mobile number.": "Please enter a valid Bangladeshi mobile number.",
+    "Payment already confirmed.": "Payment already confirmed.",
+    "Amount must equal locked fare :amount taka": "Amount must equal locked fare :amount taka",
+    "Service is not available in this area right now.": "Service is not available in this area right now.",
+    "You can save at most 3 emergency contacts.": "You can save at most 3 emergency contacts.",
+    "Duplicate guardian phone.": "Duplicate guardian phone.",
+    "This NID is already registered.": "This NID is already registered.",
+    "This number plate is already registered.": "This number plate is already registered.",
+    "Submit your documents and wait for approval before going online.": "Submit your documents and wait for approval before going online.",
+    "Commission debt limit exceeded. You cannot go online.": "Commission debt limit exceeded. You cannot go online."
+}

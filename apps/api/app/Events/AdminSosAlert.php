@@ -4,6 +4,7 @@ namespace App\Events;
 
 use App\Models\SosAlert;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use App\Constants\SocketEvents;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -17,12 +18,22 @@ class AdminSosAlert implements ShouldBroadcast
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('admin.ops')];
+        // Channel must match the closure in routes/channels.php
+        // (`admin.sos`) AND the admin panel's `private-admin.sos`
+        // subscription. The earlier `admin.ops` target was unreachable
+        // for the SOS event — admin panel subscribes to admin.sos
+        // specifically for low-volume SOS bursts, so alerts were
+        // dropped between the API and the panel.
+        return [new PrivateChannel('admin.sos')];
     }
 
     public function broadcastAs(): string
     {
-        return 'admin:sos:alert';
+        // Single source of truth: SocketEvents::ADMIN_SOS_ALERT.
+        // Hardcoding the string here was a refactor risk — if the
+        // admin panel ever renamed the event name, the channel auth
+        // test would still pass while subscribers went silent.
+        return SocketEvents::ADMIN_SOS_ALERT;
     }
 
     public function broadcastWith(): array

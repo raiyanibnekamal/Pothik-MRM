@@ -18,13 +18,19 @@ export function mapPath(
     return { url: "/auth/admin/login", method: "POST", body: json }
   }
   if (path === "/admin/dashboard-stats") return { url: "/admin/dashboard", method: "GET" }
+  if (path === "/admin/kyc/pending") return { url: "/admin/kyc/pending", method: "GET" }
   if (path.match(/^\/admin\/drivers\/[^/]+\/approve$/)) {
     const id = path.split("/")[3]
     return { url: `/admin/kyc/${id}/approve`, method: "POST" }
   }
   if (path.match(/^\/admin\/drivers\/[^/]+\/reject$/)) {
     const id = path.split("/")[3]
-    return { url: `/admin/kyc/${id}/reject`, method: "POST", body: { note: "Rejected from admin panel" } }
+    const body = (json as { note?: string } | undefined) ?? {}
+    return {
+      url: `/admin/kyc/${id}/reject`,
+      method: "POST",
+      body: { note: body.note || "Rejected from admin panel" },
+    }
   }
   if (path.match(/^\/admin\/users\/[^/]+\/block$/)) {
     const id = path.split("/")[3]
@@ -75,6 +81,12 @@ export function transformResponse<T>(path: string, data: unknown): T {
   }
 
   if (path === "/admin/drivers") {
+    const page = data as { data?: unknown[] } | unknown[]
+    const rows = Array.isArray(page) ? page : (page.data ?? [])
+    return rows.map(mapDriver) as T
+  }
+
+  if (path === "/admin/kyc/pending") {
     const page = data as { data?: unknown[] } | unknown[]
     const rows = Array.isArray(page) ? page : (page.data ?? [])
     return rows.map(mapDriver) as T

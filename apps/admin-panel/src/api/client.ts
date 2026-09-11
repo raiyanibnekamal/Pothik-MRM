@@ -4,6 +4,16 @@ const env = import.meta.env.VITE_APP_ENV ?? "local"
 const useMock = import.meta.env.VITE_USE_MOCK !== "false"
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
 
+// Demo-mode credentials. Only honoured when `useMock === true`; in any real
+// build the password comes from `VITE_DEMO_PASSWORD` (or stays undefined, in
+// which case mock login is disabled).
+// Demo-mode credentials are only honoured when `useMock === true`. The
+// fallbacks below are intentionally env-only: when unset, demo / QA login is
+// simply disabled and no demo password ever ends up in the production bundle.
+const demoEmail = import.meta.env.VITE_DEMO_EMAIL
+const demoPassword = import.meta.env.VITE_DEMO_PASSWORD
+const qaPassword = import.meta.env.VITE_QA_PASSWORD
+
 export type Driver = {
   id: string
   name: string
@@ -54,6 +64,7 @@ export type HoldingRow = {
 
 type Store = {
   token: string | null
+  refreshToken: string | null
   loginFails: number
   drivers: Driver[]
   users: UserRow[]
@@ -85,6 +96,7 @@ type Store = {
 
 const store: Store = {
   token: localStorage.getItem("admin_token"),
+  refreshToken: localStorage.getItem("admin_refresh_token"),
   loginFails: 0,
   drivers: [
     {
@@ -246,6 +258,70 @@ export async function api<T>(
 ): Promise<T> {
   if (useMock) return mock(path, init.json, init.method ?? "GET") as Promise<T>
 
+  return realApi<T>(path, init, 0)
+}
+
+/**
+ * Single-flight refresh: when multiple requests fire in parallel and all
+ * hit a 401, we issue exactly one /auth/refresh and let the others wait
+ * for the same promise instead of stampeding the auth endpoint.
+ */
+let refreshInFlight: Promise<string | null> | null = null
+
+async function doRefresh(): Promise<string | null> {
+  if (!store.refreshToken) return null
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${apiUrl}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: store.refreshToken }),
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok || !body?.data?.access_token) return null
+      store.token = body.data.access_token as string
+      localStorage.setItem("admin_token", store.token)
+      if (body.data.refresh_token) {
+        store.refreshToken = body.data.refresh_token as string
+        localStorage.setItem("admin_refresh_token", store.refreshToken)
+      }
+      return store.token
+    } catch {
+      return null
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
+}
+
+function clearSession() {
+  store.token = null
+  store.refreshToken = null
+  localStorage.removeItem("admin_token")
+  localStorage.removeItem("admin_refresh_token")
+  notifyAuthChange()
+}
+
+const AUTH_EVENT = "admin_auth_change"
+function notifyAuthChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_EVENT))
+  }
+}
+
+export function onAuthChange(handler: () => void): () => void {
+  if (typeof window === "undefined") return () => {}
+  window.addEventListener(AUTH_EVENT, handler)
+  return () => window.removeEventListener(AUTH_EVENT, handler)
+}
+
+async function realApi<T>(
+  path: string,
+  init: RequestInit & { json?: unknown },
+  retryCount: number,
+): Promise<T> {
   const method = init.method ?? "GET"
   const mapped = mapPath(path, method, init.json)
   const headers = new Headers(init.headers)
@@ -259,17 +335,37 @@ export async function api<T>(
     headers,
     body: payload !== undefined ? JSON.stringify(payload) : init.body,
   })
-  const body = await res.json()
+
+  // 401 with a stored refresh token → try to refresh once, then retry
+  // the original request. Anything that has nothing to refresh with (no
+  // refresh_token, or refresh endpoint rejects us) ends the session.
+  if (res.status === 401 && retryCount === 0 && store.refreshToken && path !== "/auth/refresh" && path !== "/auth/login") {
+    const newToken = await doRefresh()
+    if (newToken) {
+      return realApi<T>(path, init, retryCount + 1)
+    }
+    clearSession()
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? "Session expired")
+  }
+
+  const body = await res.json().catch(() => null)
   if (!res.ok) {
+    if (res.status === 401) clearSession()
     throw new Error(body?.error?.message ?? "Request failed")
   }
 
-  if (path === "/auth/login" && body.data?.access_token) {
+  if (path === "/auth/login" && body?.data?.access_token) {
     store.token = body.data.access_token as string
     localStorage.setItem("admin_token", store.token)
+    if (body.data.refresh_token) {
+      store.refreshToken = body.data.refresh_token as string
+      localStorage.setItem("admin_refresh_token", store.refreshToken)
+    }
+    notifyAuthChange()
   }
 
-  return transformResponse<T>(path, body.data)
+  return transformResponse<T>(path, body?.data)
 }
 
 async function mock(path: string, json: unknown, method: string) {
@@ -279,11 +375,18 @@ async function mock(path: string, json: unknown, method: string) {
     if (store.loginFails >= 6) {
       throw new Error("কিছুক্ষণ পর আবার চেষ্টা করুন।")
     }
-    if (
-      (body.email === "ops@bdrideshare.com" && body.password === "Admin@1234") ||
-      (isQaLogin(body.email) && body.password === "123456") ||
-      (body.email === "qa@bdrideshare.com" && body.password === "123456")
-    ) {
+    // Real builds go straight to the API; only mock mode honours the env-driven
+    // demo credentials so no password lives in the production bundle.
+    if (!useMock) {
+      throw new Error("Mock login disabled — use real API.")
+    }
+    const matchesDemo =
+      !!demoPassword && body.email === demoEmail && body.password === demoPassword
+    const matchesQa =
+      !!qaPassword &&
+      ((isQaLogin(body.email) && body.password === qaPassword) ||
+        (body.email === "qa@bdrideshare.com" && body.password === qaPassword))
+    if (matchesDemo || matchesQa) {
       store.loginFails = 0
       store.token = "admin_local_token"
       localStorage.setItem("admin_token", store.token)
@@ -298,11 +401,16 @@ async function mock(path: string, json: unknown, method: string) {
   }
   if (path === "/auth/logout") {
     store.token = null
+    store.refreshToken = null
     localStorage.removeItem("admin_token")
+    localStorage.removeItem("admin_refresh_token")
     return envelope(null).data
   }
   if (path === "/admin/dashboard-stats") return envelope(store.stats).data
   if (path === "/admin/drivers") return envelope(store.drivers).data
+  if (path === "/admin/kyc/pending") {
+    return envelope(store.drivers.filter((d) => d.kyc === "pending")).data
+  }
   if (path.startsWith("/admin/drivers/") && method === "GET") {
     const id = path.split("/").pop()
     return envelope(store.drivers.find((d) => d.id === id)).data

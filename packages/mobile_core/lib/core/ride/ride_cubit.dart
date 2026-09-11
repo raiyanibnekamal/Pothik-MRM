@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mobile_core/core/location/route_service.dart';
 import 'package:mobile_core/core/models/models.dart';
+import 'package:mobile_core/core/network/api_backend.dart';
 import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/network/mock_backend.dart';
 
@@ -126,11 +127,30 @@ class RideCubit extends Cubit<RideState> {
   RideCubit(this.backend, {RouteService? routes})
       : routes = routes ?? RouteService(),
         super(const RideState()) {
-    emit(state.copyWith(types: backend.types, selectedType: MockBackend.bike));
+    _bootstrap();
   }
 
   final MockBackend backend;
   final RouteService routes;
+
+  ApiBackend? get _api => backend is ApiBackend ? backend as ApiBackend : null;
+
+  Future<void> _bootstrap() async {
+    final api = _api;
+    if (api != null) {
+      try {
+        final fetched = await api.fetchVehicleTypes();
+        emit(state.copyWith(
+          types: fetched,
+          selectedType: fetched.isNotEmpty ? fetched.first : null,
+        ));
+        return;
+      } catch (_) {
+        // Fall back to mock types on failure.
+      }
+    }
+    emit(state.copyWith(types: backend.types, selectedType: MockBackend.bike));
+  }
 
   void setDrop(LatLng p, String label) {
     emit(state.copyWith(drop: p, dropLabel: label, clearRoute: true));
@@ -189,50 +209,112 @@ class RideCubit extends Cubit<RideState> {
     final drop = state.drop;
     final type = state.selectedType;
     if (drop == null || type == null) return;
-    emit(state.copyWith(busy: true, phase: RidePhase.finding, clearError: true));
+    emit(state.copyWith(
+      busy: true,
+      phase: RidePhase.finding,
+      clearError: true,
+    ));
     try {
-      final ride = await backend.createRide(
-        pickup: state.pickup,
-        drop: drop,
-        pickupLabel:
-            state.pickupLabel.isEmpty ? 'Pickup point' : state.pickupLabel,
-        dropLabel: state.dropLabel ?? '',
-        type: type,
-      );
+      final api = _api;
+      final Ride ride;
+      if (api != null) {
+        ride = await api.createRideApi(
+          vehicleCode: type.code,
+          pickup: state.pickup,
+          pickupAddress:
+              state.pickupLabel.isEmpty ? 'Pickup point' : state.pickupLabel,
+          drop: drop,
+          dropAddress: state.dropLabel ?? '',
+          paymentMethod: 'CASH',
+        );
+      } else {
+        ride = await backend.createRide(
+          pickup: state.pickup,
+          drop: drop,
+          pickupLabel:
+              state.pickupLabel.isEmpty ? 'Pickup point' : state.pickupLabel,
+          dropLabel: state.dropLabel ?? '',
+          type: type,
+        );
+      }
       emit(state.copyWith(busy: false, ride: ride, phase: RidePhase.finding));
       try {
-        final matched = await backend.matchDemo();
+        final matched = api != null
+            ? await api.matchDemoApi(
+                rideId: ride.id,
+                timeout: const Duration(seconds: 30),
+              )
+            : await backend.matchDemo();
+        final finalRide = matched ?? ride;
         emit(state.copyWith(
-          ride: matched,
-          phase: RidePhase.matched,
-          showDriverSheet: true,
+          ride: finalRide,
+          phase: finalRide.driver != null
+              ? RidePhase.matched
+              : RidePhase.noDriver,
+          showDriverSheet: finalRide.driver != null,
           matchedAt: DateTime.now(),
+          error: finalRide.driver == null ? 'No driver accepted yet' : null,
         ));
       } on ApiException catch (e) {
         emit(state.copyWith(phase: RidePhase.noDriver, error: e.message));
       }
     } on ApiException catch (e) {
-      emit(state.copyWith(busy: false, phase: RidePhase.idle, error: e.message));
+      emit(state.copyWith(
+        busy: false,
+        phase: RidePhase.idle,
+        error: e.message,
+      ));
     }
   }
 
   void ackDriverSheet() {
     emit(state.copyWith(showDriverSheet: false, phase: RidePhase.tracking));
-    backend.advance(RideStatus.driverArriving);
+    final api = _api;
+    if (api != null) {
+      api.advanceApi();
+    } else {
+      backend.advance(RideStatus.driverArriving);
+    }
   }
 
   Future<void> markInProgress() async {
-    final ride = await backend.advance(RideStatus.inProgress);
-    emit(state.copyWith(ride: ride, phase: RidePhase.tracking));
+    final api = _api;
+    final Ride? ride;
+    if (api != null) {
+      ride = await api.advanceApi();
+    } else {
+      ride = await backend.advance(RideStatus.inProgress);
+    }
+    if (ride != null) {
+      emit(state.copyWith(ride: ride, phase: RidePhase.tracking));
+    }
   }
 
   Future<void> complete() async {
-    final ride = await backend.advance(RideStatus.completed);
-    emit(state.copyWith(ride: ride, phase: RidePhase.complete));
+    final api = _api;
+    final Ride? ride;
+    if (api != null) {
+      ride = await api.advanceApi();
+    } else {
+      ride = await backend.advance(RideStatus.completed);
+    }
+    if (ride != null) {
+      emit(state.copyWith(ride: ride, phase: RidePhase.complete));
+    }
   }
 
   Future<void> cancel() async {
-    await backend.advance(RideStatus.cancelled);
+    final ride = state.ride;
+    final api = _api;
+    try {
+      if (api != null && ride != null) {
+        await api.cancelRide(ride.id);
+      } else {
+        await backend.advance(RideStatus.cancelled);
+      }
+    } on ApiException catch (_) {
+      // Best-effort cancel — always reset local state.
+    }
     backend.activeRide = null;
     emit(state.copyWith(
       phase: RidePhase.idle,
@@ -242,14 +324,18 @@ class RideCubit extends Cubit<RideState> {
   }
 
   Future<void> rateAndReset() async {
-    await backend.completeAndRate();
-    emit(RideState(
-      types: backend.types,
-      selectedType: MockBackend.bike,
-      pickup: state.pickup,
-      pickupLabel: state.pickupLabel,
-      pickupIsManual: state.pickupIsManual,
-    ));
+    final ride = state.ride;
+    final api = _api;
+    try {
+      if (api != null && ride != null) {
+        await api.rateRideApi(rideId: ride.id, stars: 5);
+      } else {
+        await backend.completeAndRate();
+      }
+    } on ApiException catch (_) {
+      // ignore rating failures; reset anyway.
+    }
+    await _bootstrap();
   }
 
   void retryFind() => book();

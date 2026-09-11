@@ -6,6 +6,7 @@ use App\Constants\ErrorCodes;
 use App\Constants\SocketEvents;
 use App\Enums\RideStatus;
 use App\Events\RideDispatched;
+use App\Events\RideStatusChanged;
 use App\Exceptions\ApiException;
 use App\Jobs\DispatchTimeoutJob;
 use App\Models\Ride;
@@ -98,7 +99,29 @@ class DispatchService
             'pin' => str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT),
         ]);
 
-        return $ride->fresh(['driver.driverProfile', 'vehicleType', 'passenger']);
+        $fresh = $ride->fresh(['driver.driverProfile', 'vehicleType', 'passenger']);
+
+        event(new RideStatusChanged(
+            rideId: $fresh->id,
+            passengerId: (string) $fresh->passenger_id,
+            driverId: $driverId,
+            fromStatus: RideStatus::REQUESTED,
+            toStatus: RideStatus::ACCEPTED,
+            eventName: SocketEvents::SERVER_RIDE_ACCEPTED,
+            extra: [
+                'driver_name' => $fresh->driver?->name,
+                'driver_phone' => null, // masked call happens in Phase 1
+                'vehicle' => $fresh->driver?->driverProfile ? [
+                    'make' => $fresh->driver->driverProfile->vehicle_make,
+                    'model' => $fresh->driver->driverProfile->vehicle_model,
+                    'color' => $fresh->driver->driverProfile->vehicle_color,
+                    'plate_no' => $fresh->driver->driverProfile->plate_no,
+                ] : null,
+                'pin' => $fresh->pin,
+            ]
+        ));
+
+        return $fresh;
     }
 
     public function decline(Ride $ride, string $driverId): void
@@ -129,6 +152,18 @@ class DispatchService
     private function markNoDriver(Ride $ride): void
     {
         $ride->update(['status' => RideStatus::NO_DRIVER_AVAILABLE]);
+
+        event(new RideStatusChanged(
+            rideId: $ride->id,
+            passengerId: (string) $ride->passenger_id,
+            driverId: $ride->driver_id,
+            fromStatus: RideStatus::REQUESTED,
+            toStatus: RideStatus::NO_DRIVER_AVAILABLE,
+            eventName: SocketEvents::SERVER_RIDE_TIMEOUT,
+            extra: [
+                'reason' => 'no_driver_within_radius',
+            ]
+        ));
     }
 
     private function buildDispatchPayload(Ride $ride, array $driver): array

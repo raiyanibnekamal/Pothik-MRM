@@ -21,7 +21,13 @@ class RideDispatched implements ShouldBroadcast
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('user.' . $this->driverId)];
+        // Must match the driver channel closure in routes/channels.php
+        // (`driver.{id}`) AND the driver app's `private-driver.{driverId}`
+        // subscription in DriverSocketService. The earlier `user.{id}`
+        // target was unreachable — drivers never subscribe to a generic
+        // `private-user.{id}` channel, so dispatch offers were silently
+        // dropped between the API and the device.
+        return [new PrivateChannel('driver.' . $this->driverId)];
     }
 
     public function broadcastAs(): string

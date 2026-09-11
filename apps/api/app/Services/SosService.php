@@ -100,7 +100,7 @@ class SosService
             if (!$ride || $ride->status !== RideStatus::IN_PROGRESS) {
                 throw new ApiException(
                     ErrorCodes::SOS_NOT_ALLOWED,
-                    'রাইড চলাকালীনই SOS ব্যবহার করা যাবে।',
+                    'SOS only available during an active ride.',
                     403
                 );
             }
@@ -111,7 +111,7 @@ class SosService
             if (!$profile || !$profile->is_online) {
                 throw new ApiException(
                     ErrorCodes::SOS_NOT_ALLOWED,
-                    'অনলাইন থাকলে SOS ব্যবহার করা যাবে।',
+                    'SOS only available while you are online.',
                     403
                 );
             }
@@ -150,11 +150,14 @@ class SosService
             $plate = $ride->driver->driverProfile?->plate_no ?? 'N/A';
         }
 
-        $message = "জরুরি সতর্কতা / EMERGENCY — {$user->name} SOS চালু করেছেন।\n"
-            . "Ride: {$ride?->id} | সময়: " . now()->format('Y-m-d H:i') . "\n"
-            . "ড্রাইভার: {$driverName} | গাড়ি: {$plate}\n"
-            . "লাইভ লোকেশন: {$trackUrl}\n"
-            . 'এখনই যোগাযোগ করুন।';
+        $message = trans('Emergency alert body', [
+            'name' => $user->name,
+            'ride' => $ride?->id ?? '-',
+            'time' => now()->format('Y-m-d H:i'),
+            'driver' => $driverName,
+            'plate' => $plate,
+            'url' => $trackUrl,
+        ]);
 
         $smsService = app(SmsService::class);
         $allSent = true;

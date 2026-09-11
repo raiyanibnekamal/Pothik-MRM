@@ -664,6 +664,17 @@ class _RideOptionsBody extends StatelessWidget {
             ),
             if (!state.routeSnapped)
               Text(s.routeApprox, style: AppText.caption(AppColors.warning)),
+          ] else if (state.drop != null) ...[
+            // Drop set but route still being computed — pulse a hint row so the
+            // user sees feedback rather than an empty gap.
+            const SizedBox(height: 4),
+            const Row(
+              children: [
+                Skeleton(height: 12, width: 120),
+                SizedBox(width: 12),
+                Skeleton(height: 12, width: 60),
+              ],
+            ),
           ],
           const SizedBox(height: 16),
           for (final t in state.types.where((t) => t.isActive))

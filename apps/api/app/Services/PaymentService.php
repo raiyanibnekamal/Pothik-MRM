@@ -37,14 +37,14 @@ class PaymentService
             ->first();
 
         if ($existingPayment) {
-            throw new ApiException(ErrorCodes::ALREADY_PAID, 'পেমেন্ট ইতিমধ্যে নিশ্চিত।', 409);
+            throw new ApiException(ErrorCodes::ALREADY_PAID, trans('Payment already confirmed.'), 409);
         }
 
         $lockedFare = (float) $ride->locked_fare;
         if (abs($amountCollected - $lockedFare) > 0.01) {
             throw new ApiException(
                 ErrorCodes::VALIDATION_ERROR,
-                "Amount must equal locked fare ৳{$lockedFare}",
+                trans('Amount must equal locked fare :amount taka', ['amount' => $lockedFare]),
                 422
             );
         }

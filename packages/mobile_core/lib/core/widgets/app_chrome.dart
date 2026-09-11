@@ -284,29 +284,65 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-class Skeleton extends StatelessWidget {
-  const Skeleton({super.key, this.height = 16, this.width, this.radius = 8});
+/// Pulsing placeholder block. Used in cold-load states for cards, lists,
+/// and avatars. Drives its own animation so it works inside `Column` /
+/// `ListView` without an external controller.
+class Skeleton extends StatefulWidget {
+  const Skeleton({
+    super.key,
+    this.height = 16,
+    this.width,
+    this.radius = 8,
+    this.duration = const Duration(milliseconds: 1200),
+  });
 
   final double height;
   final double? width;
   final double radius;
+  final Duration duration;
+
+  @override
+  State<Skeleton> createState() => _SkeletonState();
+}
+
+class _SkeletonState extends State<Skeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration)
+      ..repeat(reverse: true);
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.4, end: 1),
-      duration: const Duration(milliseconds: 800),
-      builder: (context, v, _) => Opacity(
-        opacity: 0.4 + (v % 1) * 0.4,
-        child: Container(
-          height: height,
-          width: width,
-          decoration: BoxDecoration(
-            color: AppColors.gray100,
-            borderRadius: BorderRadius.circular(radius),
+    return AnimatedBuilder(
+      animation: _opacity,
+      builder: (context, _) {
+        // Map [0,1] -> [0.35, 1.0] for a soft pulse, never fully invisible.
+        final t = _opacity.value;
+        return Opacity(
+          opacity: 0.35 + (0.65 * t),
+          child: Container(
+            height: widget.height,
+            width: widget.width,
+            decoration: BoxDecoration(
+              color: AppColors.gray100,
+              borderRadius: BorderRadius.circular(widget.radius),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

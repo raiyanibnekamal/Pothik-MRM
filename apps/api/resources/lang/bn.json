@@ -1,0 +1,19 @@
+{
+    "SOS only available during an active ride.": "রাইড চলাকালীনই SOS ব্যবহার করা যাবে।",
+    "SOS only available while you are online.": "অনলাইন থাকলে SOS ব্যবহার করা যাবে।",
+    "Emergency alert body": "জরুরি সতর্কতা / EMERGENCY — :name SOS চালু করেছেন।\nRide: :ride | সময়: :time\nড্রাইভার: :driver | গাড়ি: :plate\nলাইভ লোকেশন: :url\nএখনই যোগাযোগ করুন।",
+    "Try again in a moment.": "কিছুক্ষণ পর আবার চেষ্টা করুন।",
+    "OTP expired. Please request a new one.": "OTP মেয়াদ শেষ হয়েছে। আবার পাঠান।",
+    "OTP attempt limit reached.": "OTP চেষ্টার সীমা শেষ।",
+    "Wrong OTP. :remaining attempts remaining.": "ভুল OTP। আর :remaining বার সুযোগ আছে।",
+    "Please enter a valid Bangladeshi mobile number.": "সঠিক বাংলাদেশি মোবাইল নম্বর দিন।",
+    "Payment already confirmed.": "পেমেন্ট ইতিমধ্যে নিশ্চিত।",
+    "Amount must equal locked fare :amount taka": "পরিমাণ লক করা ভাড়ার সমান হতে হবে :amount টাকা",
+    "Service is not available in this area right now.": "এই এলাকায় এখন সার্ভিস নেই।",
+    "You can save at most 3 emergency contacts.": "সর্বোচ্চ ৩ জন ইমার্জেন্সি কন্টাক্ট।",
+    "Duplicate guardian phone.": "এই ফোন নম্বরটি ইতিমধ্যে যুক্ত করা আছে।",
+    "This NID is already registered.": "এই NID আগে থেকেই নিবন্ধিত।",
+    "This number plate is already registered.": "এই নম্বর প্লেট আগে থেকেই নিবন্ধিত।",
+    "Submit your documents and wait for approval before going online.": "কাগজপত্র জমা দিয়ে অনুমোদনের পর অনলাইন যাবেন।",
+    "Commission debt limit exceeded. You cannot go online.": "কমিশন বকেয়া সীমা ছাড়িয়েছে। অনলাইন যাওয়া যাবে না।"
+}

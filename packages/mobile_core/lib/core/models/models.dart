@@ -100,7 +100,8 @@ class UserProfile extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, phone, name, onboarding, language];
+  List<Object?> get props =>
+      [id, phone, name, onboarding, language, locationPrimed];
 }
 
 class VehicleType extends Equatable {

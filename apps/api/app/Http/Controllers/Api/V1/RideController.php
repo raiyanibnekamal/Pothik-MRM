@@ -167,6 +167,41 @@ class RideController extends Controller
         return ApiResponse::success($this->rideService->formatRide($ride));
     }
 
+    public function arriving(Request $request, string $id)
+    {
+        $ride = $this->findAuthorizedRide($request, $id);
+        if ($ride->driver_id !== $request->user()->id) {
+            throw new ApiException(ErrorCodes::FORBIDDEN, 'Forbidden', 403);
+        }
+
+        $ride = $this->rideService->transition($ride, RideStatus::DRIVER_ARRIVING, $request->user());
+
+        return ApiResponse::success($this->rideService->formatRide($ride));
+    }
+
+    /**
+     * Driver polls this to see whether they have an outstanding dispatch
+     * offer. Returns the pending ride payload (formatted) or null.
+     */
+    public function incoming(Request $request)
+    {
+        $driverId = $request->user()->id;
+        $attempt = \App\Models\RideDispatchAttempt::with('ride.vehicleType', 'ride.passenger')
+            ->where('driver_id', $driverId)
+            ->where('result', 'pending')
+            ->orderByDesc('offered_at')
+            ->first();
+
+        if (!$attempt) {
+            return ApiResponse::success(['ride' => null]);
+        }
+
+        return ApiResponse::success([
+            'ride' => $this->rideService->formatRide($attempt->ride),
+            'expires_in_seconds' => max(0, 15 - $attempt->offered_at->diffInSeconds(now())),
+        ]);
+    }
+
     public function verifyPin(Request $request, string $id)
     {
         $request->validate(['pin' => 'required|string|size:4']);

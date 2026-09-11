@@ -7,8 +7,10 @@ import { useT } from "../i18n/LocaleProvider"
 export function LoginPage() {
   const { t } = useT()
   const nav = useNavigate()
-  const [email, setEmail] = useState("0152170004")
-  const [password, setPassword] = useState("123456")
+  const useMock = import.meta.env.VITE_USE_MOCK !== "false"
+  const demoEmail = import.meta.env.VITE_DEMO_EMAIL
+  const [email, setEmail] = useState(useMock && demoEmail ? demoEmail : "")
+  const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -54,7 +56,9 @@ export function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          <p className="text-[14px] text-[var(--text-secondary)]">{t.loginHint}</p>
+          {useMock ? (
+            <p className="text-[14px] text-[var(--text-secondary)]">{t.loginHint}</p>
+          ) : null}
           {error ? <p className="text-[14px] text-[var(--danger)]">{error}</p> : null}
           <PrimaryButton type="submit" loading={loading} disabled={loading}>
             {t.signIn}

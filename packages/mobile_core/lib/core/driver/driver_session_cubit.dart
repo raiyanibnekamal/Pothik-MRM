@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mobile_core/core/models/models.dart';
+import 'package:mobile_core/core/network/api_backend.dart';
 import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/network/mock_backend.dart';
 import 'package:mobile_core/native/gps_channel.dart';
@@ -135,12 +136,29 @@ class DriverSessionState extends Equatable {
 
 class DriverSessionCubit extends Cubit<DriverSessionState> {
   DriverSessionCubit(this.backend) : super(const DriverSessionState()) {
-    emit(state.copyWith(earnings: backend.earnings()));
+    _loadEarnings();
   }
 
   final MockBackend backend;
   Timer? _ring;
-  Timer? _demoOffer;
+  Timer? _offerTimer;
+  Timer? _locationTimer;
+
+  ApiBackend? get _api => backend is ApiBackend ? backend as ApiBackend : null;
+
+  Future<void> _loadEarnings() async {
+    final api = _api;
+    if (api != null) {
+      try {
+        final e = await api.fetchEarnings();
+        emit(state.copyWith(earnings: e));
+        return;
+      } catch (_) {
+        // fall through to mock
+      }
+    }
+    emit(state.copyWith(earnings: backend.earnings()));
+  }
 
   Future<String?> goOnline({
     required bool debtBlocked,
@@ -151,16 +169,31 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
     backend.driverOnline = true;
     emit(state.copyWith(online: true, onBreak: false));
     await GpsChannel.start(batterySaver: state.batterySaver);
-    _demoOffer?.cancel();
-    _demoOffer = Timer(const Duration(seconds: 2), _offer);
+    final api = _api;
+    if (api != null) {
+      try {
+        await api.setDriverAvailability(online: true);
+      } on ApiException catch (e) {
+        emit(state.copyWith(error: e.message));
+        return e.code;
+      }
+      _startLocationStream();
+    }
+    _offerTimer?.cancel();
+    _offerTimer = Timer(const Duration(seconds: 2), _offer);
     return null;
   }
 
   void goOffline() {
     _ring?.cancel();
-    _demoOffer?.cancel();
+    _offerTimer?.cancel();
+    _locationTimer?.cancel();
     GpsChannel.stop();
     backend.driverOnline = false;
+    final api = _api;
+    if (api != null) {
+      api.setDriverAvailability(online: false).catchError((_) {});
+    }
     emit(state.copyWith(
       online: false,
       onBreak: false,
@@ -180,10 +213,77 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
   void updateLocation(LatLng point) {
     if (state.driverPoint == point) return;
     emit(state.copyWith(driverPoint: point));
+    _pushLocation(point);
   }
 
-  void _offer() {
-    if (!state.online || state.onBreak) return;
+  /// Forwards the latest GPS fix to the API so dispatch can find this driver.
+  void _pushLocation(LatLng p) {
+    final api = _api;
+    if (api == null || !state.online) return;
+    api.postDriverLocation(lat: p.latitude, lng: p.longitude).catchError((_) {});
+  }
+
+  void _startLocationStream() {
+    _locationTimer?.cancel();
+    final p = state.driverPoint;
+    if (p != null) _pushLocation(p);
+    _locationTimer =
+        Timer.periodic(const Duration(seconds: 15), (_) {
+      final point = state.driverPoint;
+      if (point != null) _pushLocation(point);
+    });
+  }
+
+  Future<void> _offer() async {
+    if (!state.online || state.onBreak || isClosed) return;
+    final api = _api;
+    if (api != null) {
+      try {
+        final ride = await api.pollForIncomingRequest(
+          timeout: const Duration(seconds: 5),
+        );
+        if (ride != null) {
+          final req = DriverRequest(
+            rideId: ride.id,
+            pickupDistanceKm: 0,
+            fareBdt: ride.fare.total,
+            dropArea: ride.dropLabel,
+            paymentMethod: ride.paymentMethod,
+            seconds: 15,
+            pickup: ride.pickup,
+            drop: ride.drop,
+          );
+          emit(state.copyWith(
+            phase: DriverTripPhase.request,
+            request: req,
+            requestLeft: 15,
+            rideId: ride.id,
+            fareBdt: ride.fare.total,
+          ));
+          _ring?.cancel();
+          _ring = Timer.periodic(const Duration(seconds: 1), (t) {
+            final left = state.requestLeft - 1;
+            if (left <= 0) {
+              t.cancel();
+              emit(state.copyWith(
+                phase: DriverTripPhase.idle,
+                clearRequest: true,
+                requestLeft: 15,
+              ));
+            } else {
+              emit(state.copyWith(requestLeft: left));
+            }
+          });
+          return;
+        }
+      } on ApiException catch (_) {
+        // ignore — try again on next tick
+      }
+      // Schedule the next poll.
+      _offerTimer = Timer(const Duration(seconds: 3), _offer);
+      return;
+    }
+    // Mock fallback.
     final req = backend.spawnRequest(driverAt: state.driverPoint);
     emit(state.copyWith(
       phase: DriverTripPhase.request,
@@ -207,11 +307,16 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
   }
 
   void decline() {
+    final id = state.rideId ?? state.request?.rideId;
     _ring?.cancel();
     emit(state.copyWith(phase: DriverTripPhase.idle, clearRequest: true));
+    final api = _api;
+    if (api != null && id != null) {
+      api.declineRide(id).catchError((_) {});
+    }
   }
 
-  void accept() {
+  Future<void> accept() async {
     _ring?.cancel();
     final req = state.request;
     emit(state.copyWith(
@@ -222,16 +327,53 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
       tripDrop: req?.drop,
       clearRequest: true,
     ));
+    final api = _api;
+    if (api != null && req != null) {
+      try {
+        final ride = await api.acceptRide(req.rideId);
+        emit(state.copyWith(
+          pin: ride?.pin ?? state.pin,
+          fareBdt: ride?.fare.total ?? req.fareBdt,
+        ));
+      } on ApiException catch (e) {
+        emit(state.copyWith(error: e.message, phase: DriverTripPhase.idle));
+      }
+    }
   }
 
-  void arrived() => emit(state.copyWith(phase: DriverTripPhase.arrived));
+  Future<void> arrived() async {
+    emit(state.copyWith(phase: DriverTripPhase.arrived));
+    final api = _api;
+    final id = state.rideId;
+    if (api != null && id != null) {
+      try {
+        await api.markArrived(id);
+      } on ApiException catch (e) {
+        emit(state.copyWith(error: e.message));
+      }
+    }
+  }
 
   void openPin() => emit(state.copyWith(phase: DriverTripPhase.pin, pin: ''));
 
   void setPin(String v) => emit(state.copyWith(pin: v, pinError: false));
 
-  bool submitPin() {
-    if (state.pin != '4821') {
+  Future<bool> submitPin() async {
+    final pin = state.pin;
+    final api = _api;
+    final id = state.rideId;
+    if (api != null && id != null) {
+      try {
+        await api.verifyRidePin(rideId: id, pin: pin);
+        emit(state.copyWith(phase: DriverTripPhase.toDrop, pinError: false));
+        return true;
+      } on ApiException catch (e) {
+        emit(state.copyWith(pinError: true, pin: '', error: e.message));
+        return false;
+      }
+    }
+    // Mock fallback — accept any 4-digit PIN locally.
+    if (pin.length < 4) {
       emit(state.copyWith(pinError: true, pin: ''));
       return false;
     }
@@ -243,13 +385,14 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
 
   Future<void> confirmCash() async {
     emit(state.copyWith(busy: true, clearError: true));
+    final amount = state.fareBdt == 0 ? 250 : state.fareBdt;
     try {
-      await backend.confirmCash(state.fareBdt == 0 ? 250 : state.fareBdt);
+      await backend.confirmCash(amount);
+      await _loadEarnings();
       emit(state.copyWith(
         busy: false,
         cashDone: true,
         phase: DriverTripPhase.rate,
-        earnings: backend.earnings(),
       ));
     } on ApiException catch (e) {
       emit(state.copyWith(busy: false, error: e.message));
@@ -273,15 +416,16 @@ class DriverSessionCubit extends Cubit<DriverSessionState> {
       clearTrip: true,
     ));
     if (state.online) {
-      _demoOffer?.cancel();
-      _demoOffer = Timer(const Duration(seconds: 8), _offer);
+      _offerTimer?.cancel();
+      _offerTimer = Timer(const Duration(seconds: 8), _offer);
     }
   }
 
   @override
   Future<void> close() {
     _ring?.cancel();
-    _demoOffer?.cancel();
+    _offerTimer?.cancel();
+    _locationTimer?.cancel();
     return super.close();
   }
 }

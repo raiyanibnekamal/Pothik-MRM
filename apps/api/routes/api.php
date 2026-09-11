@@ -15,9 +15,13 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/public/track/{token}', [PublicTrackController::class, 'track']);
 
-    // Auth
-    Route::post('/auth/otp/request', [AuthController::class, 'requestOtp'])->middleware('throttle:10,1');
-    Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
+    // Auth — OTP endpoints are gated by the "otp" named limiter registered in
+    // AppServiceProvider::registerOtpRateLimiter(), which applies BOTH a
+    // per-phone and a per-IP throttle. The IP-only fallback throttle:5,1 was
+    // removed because it let an attacker spray 5 OTPs to 5 different phones
+    // per minute without hitting the per-phone gate.
+    Route::post('/auth/otp/request', [AuthController::class, 'requestOtp'])->middleware('throttle:otp');
+    Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:otp');
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
     Route::post('/auth/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:6,1');
 
@@ -34,15 +38,17 @@ Route::prefix('v1')->group(function () {
         Route::post('/profile/emergency-contacts', [ProfileController::class, 'addEmergencyContact']);
 
         // Rides
-        Route::get('/rides/estimate', [RideController::class, 'estimate']);
-        Route::get('/rides/estimate/batch', [RideController::class, 'batchEstimate']);
+        Route::match(['get', 'post'], '/rides/estimate', [RideController::class, 'estimate']);
+        Route::match(['get', 'post'], '/rides/estimate/batch', [RideController::class, 'batchEstimate']);
         Route::get('/rides', [RideController::class, 'index']);
-        Route::post('/rides', [RideController::class, 'store']);
+        Route::post('/rides', [RideController::class, 'store'])->middleware('throttle:rides');
         Route::get('/rides/{id}', [RideController::class, 'show']);
         Route::post('/rides/{id}/accept', [RideController::class, 'accept'])->middleware('role:driver');
         Route::post('/rides/{id}/decline', [RideController::class, 'decline'])->middleware('role:driver');
+        Route::post('/rides/{id}/arriving', [RideController::class, 'arriving'])->middleware('role:driver');
         Route::post('/rides/{id}/arrived', [RideController::class, 'arrived'])->middleware('role:driver');
         Route::post('/rides/{id}/pin/verify', [RideController::class, 'verifyPin'])->middleware('role:driver');
+        Route::get('/driver/incoming', [RideController::class, 'incoming'])->middleware('role:driver');
         Route::post('/rides/{id}/cancel', [RideController::class, 'cancel']);
         Route::post('/rides/{id}/cash-confirm', [RideController::class, 'confirmCash'])->middleware('role:driver');
         Route::post('/rides/{id}/rate', [RideController::class, 'rate']);
@@ -56,12 +62,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/documents', [DriverController::class, 'uploadDocument']);
             Route::post('/submit', [DriverController::class, 'submitForReview']);
             Route::post('/availability', [DriverController::class, 'setAvailability']);
-            Route::post('/location', [DriverController::class, 'updateLocation']);
+            Route::post('/location', [DriverController::class, 'updateLocation'])->middleware('throttle:driver-location');
             Route::get('/earnings', [DriverController::class, 'earnings']);
         });
 
         // SOS
-        Route::post('/sos/trigger', [SosController::class, 'trigger']);
+        Route::post('/sos/trigger', [SosController::class, 'trigger'])->middleware('throttle:sos');
         Route::get('/sos/{id}', [SosController::class, 'show']);
         Route::post('/sos/{id}/cancel', [SosController::class, 'cancel']);
 

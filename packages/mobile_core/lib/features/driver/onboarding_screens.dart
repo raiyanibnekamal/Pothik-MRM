@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
+import 'package:mobile_core/core/network/api_backend.dart';
 import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/session/session_cubit.dart';
 import 'package:mobile_core/core/theme/app_colors.dart';
@@ -21,6 +22,7 @@ class DriverPersonalScreen extends StatefulWidget {
 class _DriverPersonalScreenState extends State<DriverPersonalScreen> {
   final name = TextEditingController();
   final nid = TextEditingController();
+  final dob = TextEditingController(text: '1995-01-15');
   final address = TextEditingController();
   String? _error;
 
@@ -28,6 +30,7 @@ class _DriverPersonalScreenState extends State<DriverPersonalScreen> {
   void dispose() {
     name.dispose();
     nid.dispose();
+    dob.dispose();
     address.dispose();
     super.dispose();
   }
@@ -35,13 +38,36 @@ class _DriverPersonalScreenState extends State<DriverPersonalScreen> {
   Future<void> _next() async {
     final n = name.text.trim();
     final id = nid.text.trim();
-    if (n.length < 2 || !(id.length == 10 || id.length == 17)) {
+    final dobStr = dob.text.trim();
+    if (n.length < 2 ||
+        !(id.length == 10 || id.length == 17) ||
+        !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dobStr)) {
       setState(() => _error = S.of(context).nameHelper);
       return;
     }
-    await context.read<SessionCubit>().saveName(n);
+    setState(() => _error = null);
+    final session = context.read<SessionCubit>();
+    await session.saveName(n);
+    final api = ApiBackend.peek();
+    if (api != null) {
+      try {
+        await api.savePersonal(
+          name: n,
+          nid: id,
+          dateOfBirth: dobStr,
+          address: address.text.trim(),
+        );
+        if (!mounted) return;
+        await session.setOnboarding(DriverOnboardingStatus.personalDone);
+        return;
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        setState(() => _error = e.message);
+        return;
+      }
+    }
     if (!mounted) return;
-    await context.read<SessionCubit>().setOnboarding(DriverOnboardingStatus.personalDone);
+    await session.setOnboarding(DriverOnboardingStatus.personalDone);
   }
 
   @override
@@ -62,6 +88,12 @@ class _DriverPersonalScreenState extends State<DriverPersonalScreen> {
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             maxLength: 17,
+          ),
+          const SizedBox(height: 16),
+          AppTextField(
+            label: s.dobLabel,
+            controller: dob,
+            keyboardType: TextInputType.datetime,
           ),
           const SizedBox(height: 16),
           AppTextField(label: s.addressLabel, controller: address),
@@ -102,7 +134,31 @@ class _DriverVehicleScreenState extends State<DriverVehicleScreen> {
     if (plate.text.trim().isEmpty) return;
     final y = int.tryParse(year.text) ?? 0;
     if (y < 2015) return;
-    await context.read<SessionCubit>().setOnboarding(DriverOnboardingStatus.grace);
+    final session = context.read<SessionCubit>();
+    final api = ApiBackend.peek();
+    if (api != null) {
+      try {
+        await api.saveVehicle(
+          vehicleType: type,
+          plate: plate.text.trim(),
+          make: make.text.trim(),
+          model: model.text.trim(),
+          color: color.text.trim(),
+          year: y,
+        );
+        if (!mounted) return;
+        await session.setOnboarding(DriverOnboardingStatus.grace);
+        return;
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+    await session.setOnboarding(DriverOnboardingStatus.grace);
   }
 
   @override
@@ -193,9 +249,23 @@ class DriverDocumentsScreen extends StatelessWidget {
             ),
             AppButton(
               label: s.submitDocs,
-              onPressed: () => context
-                  .read<SessionCubit>()
-                  .setOnboarding(DriverOnboardingStatus.pendingReview),
+              onPressed: () async {
+                final api = ApiBackend.peek();
+                final session = context.read<SessionCubit>();
+                if (api != null) {
+                  try {
+                    await api.submitDriverForReview();
+                  } on ApiException catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.message)),
+                    );
+                    return;
+                  }
+                }
+                if (!context.mounted) return;
+                await session.setOnboarding(DriverOnboardingStatus.pendingReview);
+              },
             ),
             const SizedBox(height: 8),
             AppButton(

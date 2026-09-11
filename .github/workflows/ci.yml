@@ -52,7 +52,7 @@ jobs:
           pnpm --filter admin-panel build
 
   flutter:
-    name: Flutter analyze
+    name: Flutter analyze + test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,9 +62,21 @@ jobs:
       - name: Analyze mobile_core
         run: |
           cd packages/mobile_core && flutter pub get && flutter analyze --no-fatal-infos
+      - name: Test mobile_core
+        run: |
+          cd packages/mobile_core && flutter test
       - name: Analyze passenger app
         run: |
           cd apps/passenger-app && flutter pub get && flutter analyze --no-fatal-infos
+      - name: Test passenger app
+        run: |
+          cd apps/passenger-app && flutter pub get && flutter test
+      - name: Analyze driver app
+        run: |
+          cd apps/driver-app && flutter pub get && flutter analyze --no-fatal-infos
+      - name: Test driver app
+        run: |
+          cd apps/driver-app && flutter pub get && flutter test
 
   e2e:
     name: Admin E2E smoke

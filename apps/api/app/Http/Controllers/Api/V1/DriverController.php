@@ -32,7 +32,7 @@ class DriverController extends Controller
     {
         $request->validate([
             'name' => 'required|string|min:2|max:100',
-            'nid' => 'required|string|regex:/^(\d{10}|\d{13}|\d{17})$/',
+            'nid' => ['required', 'string', 'regex:/^\d{10}$|^\d{13}$|^\d{17}$/'],
             'date_of_birth' => 'required|date|before:-18 years',
             'address' => 'required|string|max:500',
         ]);
@@ -41,7 +41,7 @@ class DriverController extends Controller
         $user->update(['name' => $request->name]);
 
         if (DriverProfile::where('nid', $request->nid)->where('user_id', '!=', $user->id)->exists()) {
-            throw new ApiException(ErrorCodes::DUPLICATE_NID, 'এই NID আগে থেকেই নিবন্ধিত।', 409);
+            throw new ApiException(ErrorCodes::DUPLICATE_NID, trans('This NID is already registered.'), 409);
         }
 
         $profile = DriverProfile::updateOrCreate(
@@ -71,7 +71,7 @@ class DriverController extends Controller
         $user = $request->user();
 
         if (DriverProfile::where('plate_no', $request->plate_no)->where('user_id', '!=', $user->id)->exists()) {
-            throw new ApiException(ErrorCodes::DUPLICATE_PLATE, 'এই নম্বর প্লেট আগে থেকেই নিবন্ধিত।', 409);
+            throw new ApiException(ErrorCodes::DUPLICATE_PLATE, trans('This number plate is already registered.'), 409);
         }
 
         $profile = DriverProfile::updateOrCreate(
@@ -131,11 +131,11 @@ class DriverController extends Controller
         }
 
         if ($request->is_online && !$profile->canGoOnline()) {
-            throw new ApiException(ErrorCodes::GRACE_OVER, 'কাগজপত্র জমা দিয়ে অনুমোদনের পর অনলাইন যাবেন।', 403);
+            throw new ApiException(ErrorCodes::GRACE_OVER, trans('Submit your documents and wait for approval before going online.'), 403);
         }
 
         if ($request->is_online && $this->isDebtCapped($request->user()->id)) {
-            throw new ApiException(ErrorCodes::DEBT_CAP, 'কমিশন বকেয়া সীমা ছাড়িয়েছে। অনলাইন যাওয়া যাবে না।', 403);
+            throw new ApiException(ErrorCodes::DEBT_CAP, trans('Commission debt limit exceeded. You cannot go online.'), 403);
         }
 
         $profile->update($request->only(['is_online', 'is_on_break', 'battery_saver']));

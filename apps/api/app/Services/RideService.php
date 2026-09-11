@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Constants\ErrorCodes;
+use App\Constants\SocketEvents;
 use App\Enums\RideStatus;
+use App\Events\RideStatusChanged;
 use App\Exceptions\ApiException;
 use App\Models\Rating;
 use App\Models\Ride;
@@ -28,7 +30,7 @@ class RideService
         app(LocationService::class)->validateCoordinates($data['drop_lat'], $data['drop_lng']);
 
         if (!$this->isInServiceZone($data['pickup_lat'], $data['pickup_lng'])) {
-            throw new ApiException(ErrorCodes::OUT_OF_ZONE, 'এই এলাকায় এখন সার্ভিস নেই।', 422);
+            throw new ApiException(ErrorCodes::OUT_OF_ZONE, trans('Service is not available in this area right now.'), 422);
         }
 
         $estimate = app(FareService::class)->estimate(
@@ -71,6 +73,7 @@ class RideService
             );
         }
 
+        $fromStatus = $ride->status;
         $updates = ['status' => $toStatus];
 
         if ($toStatus === RideStatus::DRIVER_ARRIVED) {
@@ -93,7 +96,46 @@ class RideService
 
         $ride->update($updates);
 
-        return $ride->fresh();
+        $fresh = $ride->fresh();
+
+        event(new RideStatusChanged(
+            rideId: $fresh->id,
+            passengerId: (string) $fresh->passenger_id,
+            driverId: $fresh->driver_id,
+            fromStatus: $fromStatus,
+            toStatus: $toStatus,
+            eventName: $this->socketEventForTransition($fromStatus, $toStatus),
+            extra: array_filter([
+                'reason' => $reason,
+                'actor_id' => $actor?->id,
+            ], fn ($v) => $v !== null),
+        ));
+
+        return $fresh;
+    }
+
+    /**
+     * Map a state transition to the matching server→client event constant.
+     * Kept here so all ride-status broadcast naming lives next to the
+     * service that owns the transition logic. Anything not in the table
+     * falls through to a generic "server:ride:status" event so the mobile
+     * client still gets a ping and can refetch.
+     */
+    private function socketEventForTransition(string $from, string $to): string
+    {
+        return match (true) {
+            // "Arriving" + "Arrived" both fan out as the single arrived
+            // event on the wire — the mobile client treats it as a
+            // single pickup-imminent signal.
+            $to === RideStatus::DRIVER_ARRIVING,
+            $to === RideStatus::DRIVER_ARRIVED => SocketEvents::SERVER_DRIVER_ARRIVED,
+            $to === RideStatus::IN_PROGRESS => SocketEvents::SERVER_RIDE_STARTED,
+            $to === RideStatus::COMPLETED => SocketEvents::SERVER_RIDE_COMPLETED,
+            $to === RideStatus::CANCELLED && $from === RideStatus::ACCEPTED
+                => SocketEvents::SERVER_DRIVER_CANCELLED,
+            $to === RideStatus::CANCELLED => SocketEvents::SERVER_RIDE_CANCELLED,
+            default => SocketEvents::SERVER_RIDE_ACCEPTED,
+        };
     }
 
     public function verifyPin(Ride $ride, string $pin, User $driver): Ride

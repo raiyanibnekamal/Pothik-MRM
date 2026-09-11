@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Constants\ErrorCodes;
+use App\Events\DriverLocationUpdated;
 use App\Exceptions\ApiException;
 use App\Models\DriverLocation;
 use App\Models\DriverProfile;
@@ -60,11 +61,70 @@ class LocationService
             ]);
         }
 
+        // Best-effort broadcast to the matched passenger. Failures here
+        // never fail the HTTP call — Redis is the source of truth for the
+        // admin live-map, so the websocket path is purely a UX enhancement.
+        $this->broadcastDriverLocation(
+            driverId: $driverId,
+            rideId: (string) ($rideId ?? ''),
+            lat: $lat,
+            lng: $lng,
+            speedKmh: $speedKmh,
+            bearingDeg: null,
+        );
+
         return [
             'lat' => $lat,
             'lng' => $lng,
             'speed_jump_flag' => $speedJump,
         ];
+    }
+
+    /**
+     * Push a driver location ping to the matched passenger over the private
+     * broadcast channel. No-op if the driver isn't currently on a ride or the
+     * ride has no assigned passenger (e.g. driver offline + pinging for
+     * background location services). The `bearing` arg is optional; the
+     * existing /driver/location route doesn't send it yet, so the mobile
+     * client just sees null and the map marker stops rotating — that's
+     * acceptable until Phase 1 adds bearing telemetry.
+     */
+    public function broadcastDriverLocation(
+        string $driverId,
+        string $rideId,
+        float $lat,
+        float $lng,
+        ?float $speedKmh = null,
+        ?float $bearingDeg = null
+    ): void {
+        $ride = Ride::find($rideId);
+
+        if (!$ride || !$ride->passenger_id) {
+            return;
+        }
+
+        // Only fan out during rides a passenger is actively tracking. Earlier
+        // statuses (requested/accepted) are too noisy — the driver marker
+        // belongs on the passenger's live-tracking screen, not on the home map.
+        if (!in_array($ride->status, [
+            \App\Enums\RideStatus::ACCEPTED,
+            \App\Enums\RideStatus::DRIVER_ARRIVING,
+            \App\Enums\RideStatus::DRIVER_ARRIVED,
+            \App\Enums\RideStatus::IN_PROGRESS,
+        ], true)) {
+            return;
+        }
+
+        event(new DriverLocationUpdated(
+            rideId: $rideId,
+            passengerId: (string) $ride->passenger_id,
+            driverId: $driverId,
+            lat: $lat,
+            lng: $lng,
+            speedKmh: $speedKmh,
+            bearingDeg: $bearingDeg,
+            updatedAt: now()->toIso8601String(),
+        ));
     }
 
     public function getDriverLocation(string $driverId): ?array

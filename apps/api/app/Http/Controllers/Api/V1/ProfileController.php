@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\EmergencyContactResource;
+use App\Http\Resources\PublicUserResource;
 use App\Models\EmergencyContact;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -14,15 +16,8 @@ class ProfileController extends Controller
         $user = $request->user()->load('emergencyContacts');
 
         return ApiResponse::success([
-            'id' => $user->id,
-            'phone' => $user->phone,
-            'email' => $user->email,
-            'name' => $user->name,
-            'photo_url' => $user->photo_url,
-            'role' => $user->role,
-            'language' => $user->language,
-            'rating_avg' => (float) $user->rating_avg,
-            'emergency_contacts' => $user->emergencyContacts,
+            'user' => (new PublicUserResource($user))->toArray($request),
+            'emergency_contacts' => EmergencyContactResource::collection($user->emergencyContacts)->toArray($request),
         ]);
     }
 
@@ -38,7 +33,9 @@ class ProfileController extends Controller
         $user = $request->user();
         $user->update($request->only(['name', 'email', 'language', 'photo_url']));
 
-        return ApiResponse::success($user->fresh(), 'Profile updated');
+        return ApiResponse::success([
+            'user' => (new PublicUserResource($user->fresh()))->toArray($request),
+        ], 'Profile updated');
     }
 
     public function addEmergencyContact(Request $request)
@@ -50,11 +47,11 @@ class ProfileController extends Controller
 
         $user = $request->user();
         if ($user->emergencyContacts()->count() >= 3) {
-            return ApiResponse::error('GUARDIAN_CAP', 'সর্বোচ্চ ৩ জন ইমার্জেন্সি কন্টাক্ট।', 422);
+            return ApiResponse::error('GUARDIAN_CAP', trans('You can save at most 3 emergency contacts.'), 422);
         }
 
         if ($user->emergencyContacts()->where('phone', $request->phone)->exists()) {
-            return ApiResponse::error('DUPLICATE_GUARDIAN', 'Duplicate guardian phone', 409);
+            return ApiResponse::error('DUPLICATE_GUARDIAN', trans('Duplicate guardian phone.'), 409);
         }
 
         app(\App\Services\OtpService::class)->validatePhone($request->phone);
@@ -65,11 +62,17 @@ class ProfileController extends Controller
             'phone' => $request->phone,
         ]);
 
-        return ApiResponse::success($contact, 'Guardian added', 201);
+        return ApiResponse::success(
+            (new EmergencyContactResource($contact))->toArray($request),
+            'Guardian added',
+            201
+        );
     }
 
     public function listEmergencyContacts(Request $request)
     {
-        return ApiResponse::success($request->user()->emergencyContacts);
+        return ApiResponse::success(
+            EmergencyContactResource::collection($request->user()->emergencyContacts)->toArray($request)
+        );
     }
 }

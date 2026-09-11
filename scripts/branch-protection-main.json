@@ -4,7 +4,7 @@
     "contexts": [
       "Laravel API",
       "Admin panel",
-      "Flutter analyze",
+      "Flutter analyze + test",
       "Admin E2E smoke"
     ]
   },

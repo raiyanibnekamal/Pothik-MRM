@@ -131,6 +131,10 @@ class S {
       isBn ? 'কাছাকাছি কোনো ড্রাইভার নেই। আবার চেষ্টা করুন।' : 'No drivers nearby. Please try again.';
   String get tryAgain => isBn ? 'আবার চেষ্টা' : 'Try again';
   String get driverFound => isBn ? 'ড্রাইভার পাওয়া গেছে' : 'Driver found';
+  String get driverArriving => isBn ? 'ড্রাইভার আসছে' : 'Driver is on the way';
+  String get driverArrived => isBn ? 'ড্রাইভার পৌঁছেছে' : 'Driver has arrived';
+  String get tripStarted => isBn ? 'ট্রিপ শুরু হয়েছে' : 'Trip started';
+  String etaPill(int min) => isBn ? 'আসছে $min মিনিটে' : 'Arriving in $min min';
   String get verified => isBn ? 'ভেরিফাইড' : 'Verified';
   String get matchPlate => isBn ? 'এই নম্বর প্লেট মিলিয়ে নিন' : 'Match this plate';
   String get call => isBn ? 'কল' : 'Call';

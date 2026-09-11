@@ -1,8 +1,10 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
 import {
   LayoutDashboard,
   Map,
   ShieldAlert,
+  ShieldCheck,
   Car,
   Route,
   Users,
@@ -11,7 +13,7 @@ import {
   Settings,
 } from "lucide-react"
 import { useT } from "../../i18n/LocaleProvider"
-import { api, envName } from "../../api/client"
+import { api, envName, type Driver } from "../../api/client"
 import { SosBanner } from "../sos/SosBanner"
 import { useSosPolling } from "../../hooks/useSosPolling"
 
@@ -20,6 +22,7 @@ const links = [
   { to: "/map", key: "liveMap" as const, icon: Map },
   { to: "/sos", key: "sos" as const, icon: ShieldAlert },
   { to: "/drivers", key: "drivers" as const, icon: Car },
+  { to: "/kyc/pending", key: "kycQueue" as const, icon: ShieldCheck },
   { to: "/rides", key: "rides" as const, icon: Route },
   { to: "/users", key: "users" as const, icon: Users },
   { to: "/finance", key: "finance" as const, icon: Wallet },
@@ -32,6 +35,27 @@ export function AppShell() {
   const nav = useNavigate()
   const { sos } = useSosPolling()
   const sosCount = sos.length
+  const [kycPending, setKycPending] = useState(0)
+
+  useEffect(() => {
+    let alive = true
+    void loadKycPending()
+    const id = window.setInterval(() => {
+      if (alive) void loadKycPending()
+    }, 30000)
+    return () => {
+      alive = false
+      window.clearInterval(id)
+    }
+    async function loadKycPending() {
+      try {
+        const list = await api<Driver[]>("/admin/kyc/pending")
+        if (alive) setKycPending(list.filter((d) => d.kyc === "pending").length)
+      } catch {
+        if (alive) setKycPending(0)
+      }
+    }
+  }, [])
 
   async function logout() {
     await api("/auth/logout", { method: "POST" })
@@ -60,6 +84,11 @@ export function AppShell() {
               <span>{t[l.key]}</span>
               {l.to === "/sos" && sosCount > 0 ? (
                 <span className="ml-auto h-[8px] w-[8px] rounded-full bg-[var(--danger)]" />
+              ) : null}
+              {l.to === "/kyc/pending" && kycPending > 0 ? (
+                <span className="ml-auto rounded-[8px] bg-[var(--warning)] px-[8px] text-[12px] font-semibold text-[var(--text-on-primary)]">
+                  {kycPending}
+                </span>
               ) : null}
             </NavLink>
           ))}

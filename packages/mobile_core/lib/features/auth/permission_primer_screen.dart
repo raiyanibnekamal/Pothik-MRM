@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
 import 'package:mobile_core/core/location/location_cubit.dart';
 import 'package:mobile_core/core/session/session_cubit.dart';
@@ -7,6 +10,7 @@ import 'package:mobile_core/core/theme/app_colors.dart';
 import 'package:mobile_core/core/theme/app_spacing.dart';
 import 'package:mobile_core/core/theme/app_text.dart';
 import 'package:mobile_core/core/widgets/app_button.dart';
+import 'package:mobile_core/core/widgets/app_chrome.dart';
 import 'package:mobile_core/core/widgets/location_widgets.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
@@ -20,19 +24,33 @@ class PermissionPrimerScreen extends StatefulWidget {
 class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> {
   bool _busy = false;
 
-  /// Asks the OS, then starts streaming so the first map already has a fix.
-  Future<void> _continue() async {
+  Future<void> _advance({required bool askPermission}) async {
+    if (_busy) return;
     setState(() => _busy = true);
-    final location = context.read<LocationCubit>();
-    final granted = await location.ensure();
-    if (granted) await location.startStream();
-    if (!mounted) return;
-    setState(() => _busy = false);
-    await context.read<SessionCubit>().markLocationPrimed();
-  }
-
-  Future<void> _skip() async {
-    await context.read<SessionCubit>().markLocationPrimed();
+    try {
+      final location = context.read<LocationCubit>();
+      final session = context.read<SessionCubit>();
+      if (askPermission) {
+        // Do not wait for a GPS fix here — emulators can hang 20+ seconds.
+        await location.ensure(request: true, requireFix: false);
+        unawaited(location.startStream());
+      }
+      await session.markLocationPrimed();
+      if (!mounted) return;
+      context.go('/passenger/home');
+    } catch (e) {
+      if (mounted) {
+        showAppSnack(
+          context,
+          S.of(context).isBn
+              ? 'এগিয়ে যাওয়া যায়নি। আবার চেষ্টা করুন।'
+              : 'Could not continue. Please try again.',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -60,14 +78,14 @@ class _PermissionPrimerScreenState extends State<PermissionPrimerScreen> {
               AppButton(
                 label: s.allowLocation,
                 loading: _busy,
-                onPressed: _continue,
+                onPressed: () => _advance(askPermission: true),
               ),
-              if (live.blocked)
-                AppButton(
-                  label: s.skip,
-                  variant: AppButtonVariant.text,
-                  onPressed: _skip,
-                ),
+              const SizedBox(height: 8),
+              AppButton(
+                label: s.skip,
+                variant: AppButtonVariant.text,
+                onPressed: _busy ? null : () => _advance(askPermission: false),
+              ),
             ],
           ),
         ),

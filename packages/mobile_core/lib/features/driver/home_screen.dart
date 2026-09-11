@@ -489,8 +489,10 @@ class _TripCard extends StatelessWidget {
                 label: s.startTrip,
                 height: 52,
                 onPressed: state.pin.length == 4
-                    ? () {
-                        if (!cubit.submitPin()) {
+                    ? () async {
+                        final ok = await cubit.submitPin();
+                        if (!context.mounted) return;
+                        if (!ok) {
                           showAppSnack(context, S.of(context).wrongOtp(1),
                               error: true);
                         }

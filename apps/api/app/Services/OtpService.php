@@ -25,7 +25,7 @@ class OtpService
         if (RateLimiter::tooManyAttempts($rateKey, self::SEND_LIMIT)) {
             throw new ApiException(
                 ErrorCodes::OTP_RATE_LIMIT,
-                'কিছুক্ষণ পর আবার চেষ্টা করুন।',
+                'Try again in a moment.',
                 429
             );
         }
@@ -62,16 +62,16 @@ class OtpService
             ->first();
 
         if (!$otp) {
-            throw new ApiException(ErrorCodes::OTP_EXPIRED, 'OTP মেয়াদ শেষ হয়েছে। আবার পাঠান।', 400);
+            throw new ApiException(ErrorCodes::OTP_EXPIRED, 'OTP expired. Please request a new one.', 400);
         }
 
         if ($otp->expires_at->isPast()) {
             $otp->delete();
-            throw new ApiException(ErrorCodes::OTP_EXPIRED, 'OTP মেয়াদ শেষ হয়েছে। আবার পাঠান।', 400);
+            throw new ApiException(ErrorCodes::OTP_EXPIRED, 'OTP expired. Please request a new one.', 400);
         }
 
         if ($otp->attempts >= self::MAX_ATTEMPTS) {
-            throw new ApiException(ErrorCodes::OTP_MAX_ATTEMPTS, 'OTP চেষ্টার সীমা শেষ।', 429);
+            throw new ApiException(ErrorCodes::OTP_MAX_ATTEMPTS, 'OTP attempt limit reached.', 429);
         }
 
         if (!Hash::check($code, $otp->code_hash)) {
@@ -79,7 +79,7 @@ class OtpService
             $remaining = self::MAX_ATTEMPTS - $otp->attempts;
             throw new ApiException(
                 ErrorCodes::OTP_INVALID,
-                "ভুল OTP। আর {$remaining} বার সুযোগ আছে।",
+                trans('Wrong OTP. :remaining attempts remaining.', ['remaining' => $remaining]),
                 400
             );
         }
@@ -92,7 +92,7 @@ class OtpService
         if (!preg_match('/^\+8801[3-9]\d{8}$/', $phone)) {
             throw new ApiException(
                 ErrorCodes::INVALID_PHONE,
-                'সঠিক বাংলাদেশি মোবাইল নম্বর দিন',
+                'Please enter a valid Bangladeshi mobile number.',
                 422
             );
         }

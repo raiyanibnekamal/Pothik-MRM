@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_core/core/l10n/app_strings.dart';
+import 'package:mobile_core/core/models/models.dart';
+import 'package:mobile_core/core/network/api_backend.dart';
+import 'package:mobile_core/core/network/error_codes.dart';
 import 'package:mobile_core/core/network/mock_backend.dart';
 import 'package:mobile_core/core/session/session_cubit.dart';
 import 'package:mobile_core/core/theme/app_colors.dart';
@@ -67,12 +70,24 @@ Future<void> showGuardianForm(BuildContext context) {
           AppButton(
             label: S.of(context).save,
             onPressed: () async {
+              final api = ApiBackend.peek();
               try {
-                await context.read<MockBackend>().addGuardian(
-                      name.text.trim(),
-                      '+880${phone.text.trim()}',
-                    );
+                if (api != null) {
+                  await api.addGuardianRemote(
+                    name: name.text.trim(),
+                    phone: '+880${phone.text.trim()}',
+                  );
+                } else {
+                  await context.read<MockBackend>().addGuardian(
+                        name.text.trim(),
+                        '+880${phone.text.trim()}',
+                      );
+                }
                 if (context.mounted) Navigator.pop(context);
+              } on ApiException catch (e) {
+                if (context.mounted) {
+                  showAppSnack(context, e.message, error: true);
+                }
               } catch (e) {
                 if (context.mounted) {
                   showAppSnack(context, e.toString(), error: true);
@@ -86,47 +101,93 @@ Future<void> showGuardianForm(BuildContext context) {
   );
 }
 
-class GuardiansScreen extends StatelessWidget {
+class GuardiansScreen extends StatefulWidget {
   const GuardiansScreen({super.key});
+
+  @override
+  State<GuardiansScreen> createState() => _GuardiansScreenState();
+}
+
+class _GuardiansScreenState extends State<GuardiansScreen> {
+  late Future<List<Guardian>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<List<Guardian>> _load() async {
+    final api = ApiBackend.peek();
+    if (api != null) {
+      try {
+        return await api.fetchGuardiansRemote();
+      } on ApiException {
+        // fall through to mock snapshot
+      }
+    }
+    return context.read<MockBackend>().guardians;
+  }
+
+  Future<void> _reload() async {
+    setState(() => _future = _load());
+    await _future;
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    final list = context.read<MockBackend>().guardians;
     return Scaffold(
       appBar: AppBarBack(title: s.guardians),
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.screen),
-        child: Column(
-          children: [
-            if (list.isEmpty)
-              Expanded(
-                child: EmptyState(
-                  title: s.guardians,
-                  body: s.guardianBody,
-                  cta: s.addGuardian,
-                  onCta: () => showGuardianForm(context),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView(
-                  children: [
-                    for (final g in list)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(g.name, style: AppText.label()),
-                        subtitle: Text(g.phone, style: AppText.helper()),
+        child: FutureBuilder<List<Guardian>>(
+          future: _future,
+          builder: (context, snap) {
+            final list = snap.data ?? const [];
+            return Column(
+              children: [
+                if (snap.connectionState != ConnectionState.done)
+                  const LinearProgressIndicator(minHeight: 2),
+                if (list.isEmpty)
+                  Expanded(
+                    child: EmptyState(
+                      title: s.guardians,
+                      body: s.guardianBody,
+                      cta: s.addGuardian,
+                      onCta: () async {
+                        await showGuardianForm(context);
+                        if (mounted) await _reload();
+                      },
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _reload,
+                      child: ListView(
+                        children: [
+                          for (final g in list)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(g.name, style: AppText.label()),
+                              subtitle: Text(g.phone, style: AppText.helper()),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
-              ),
-            if (list.length < 3)
-              AppButton(
-                label: s.addGuardian,
-                onPressed: () => showGuardianForm(context),
-              ),
-          ],
+                    ),
+                  ),
+                if (list.length < 3)
+                  AppButton(
+                    label: s.addGuardian,
+                    onPressed: () async {
+                      await showGuardianForm(context);
+                      if (mounted) await _reload();
+                    },
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

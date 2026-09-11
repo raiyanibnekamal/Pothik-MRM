@@ -47,12 +47,124 @@ services:
       REDIS_PORT: 6379
       CACHE_DRIVER: redis
       QUEUE_CONNECTION: redis
-      BROADCAST_DRIVER: pusher
+      BROADCAST_DRIVER: reverb
+      REVERB_APP_ID: app-id
+      REVERB_APP_KEY: app-key
+      REVERB_APP_SECRET: app-secret
+      REVERB_HOST: ws
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
     depends_on:
       - mysql
       - redis
     volumes:
       - ../../apps/api:/var/www/html
+
+  queue:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    container_name: bdride-queue
+    restart: unless-stopped
+    command: php artisan queue:work --tries=3 --backoff=10 --max-time=3600
+    environment:
+      APP_ENV: local
+      APP_DEBUG: 'true'
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: bd_ride_share
+      DB_USERNAME: bdride
+      DB_PASSWORD: bdride
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      BROADCAST_DRIVER: reverb
+      REVERB_APP_ID: app-id
+      REVERB_APP_KEY: app-key
+      REVERB_APP_SECRET: app-secret
+      REVERB_HOST: ws
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+    depends_on:
+      - mysql
+      - redis
+      - api
+    volumes:
+      - ../../apps/api:/var/www/html
+
+  scheduler:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    container_name: bdride-scheduler
+    restart: unless-stopped
+    command: php artisan schedule:work
+    environment:
+      APP_ENV: local
+      APP_DEBUG: 'true'
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: bd_ride_share
+      DB_USERNAME: bdride
+      DB_PASSWORD: bdride
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      BROADCAST_DRIVER: reverb
+      REVERB_APP_ID: app-id
+      REVERB_APP_KEY: app-key
+      REVERB_APP_SECRET: app-secret
+      REVERB_HOST: ws
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+    depends_on:
+      - mysql
+      - redis
+      - api
+    volumes:
+      - ../../apps/api:/var/www/html
+
+  # Laravel Reverb WebSocket broker.
+  #
+  # Phase 0d: active. The api/queue/scheduler services all share
+  # `BROADCAST_DRIVER=reverb` so broadcast events reach this container,
+  # and the api Dockerfile (PHP 8.2) now satisfies the Reverb platform
+  # requirement. `laravel/reverb` is pulled in by `composer install` on
+  # the bumped base image.
+  ws:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    container_name: bdride-ws
+    restart: unless-stopped
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    environment:
+      APP_ENV: local
+      APP_DEBUG: 'true'
+      BROADCAST_DRIVER: reverb
+      REVERB_APP_ID: app-id
+      REVERB_APP_KEY: app-key
+      REVERB_APP_SECRET: app-secret
+      REVERB_HOST: 0.0.0.0
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+    ports:
+      - '8080:8080'
+    depends_on:
+      - api
+    volumes:
+      - ../../apps/api:/var/www/html
+    healthcheck:
+      test: ['CMD', 'php', 'artisan', 'reverb:ping']
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   mysql_data:

@@ -97,8 +97,11 @@ class LocationCubit extends Cubit<LocationState> {
     );
   }
 
-  /// Asks for permission and publishes a first fix. Returns true when usable.
-  Future<bool> ensure({bool request = true}) async {
+  /// Asks for permission and optionally waits for a GPS fix.
+  ///
+  /// [requireFix] false on the permission primer so navigation is not blocked
+  /// by a slow emulator GPS lock (can take 20+ seconds).
+  Future<bool> ensure({bool request = true, bool requireFix = true}) async {
     emit(state.copyWith(status: LocationStatus.checking));
 
     if (!await Geolocator.isLocationServiceEnabled()) {
@@ -117,6 +120,12 @@ class LocationCubit extends Cubit<LocationState> {
     if (permission == LocationPermission.denied) {
       emit(state.copyWith(status: LocationStatus.denied));
       return false;
+    }
+
+    emit(state.copyWith(status: LocationStatus.ready));
+    if (!requireFix) {
+      unawaited(_seedLastKnown());
+      return true;
     }
 
     await _seedLastKnown();

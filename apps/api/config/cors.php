@@ -19,7 +19,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    // Locked from '*' to explicit origins. Comma-separated list via the
+    // `CORS_ALLOWED_ORIGINS` env var (see apps/api/.env.example:47). Defaults
+    // cover local dev only; staging/prod MUST override with the real admin
+    // panel origin(s), e.g.:
+    //   CORS_ALLOWED_ORIGINS=https://admin.bdrideshare.com
+    'allowed_origins' => array_filter(array_map('trim', explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:5174,http://localhost:5175,http://127.0.0.1:5173')))),
 
     'allowed_origins_patterns' => [],
 

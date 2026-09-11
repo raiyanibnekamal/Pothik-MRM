@@ -18,6 +18,7 @@ import 'package:mobile_core/core/widgets/branded_map.dart';
 import 'package:mobile_core/core/widgets/location_widgets.dart';
 import 'package:mobile_core/core/widgets/sos_widgets.dart';
 import 'package:mobile_core/features/shared/rating_sheet.dart';
+import 'package:mobile_core/features/passenger/status_pill.dart';
 import 'package:mobile_core/features/sos/sos_flow.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 import 'package:share_plus/share_plus.dart';
@@ -35,12 +36,14 @@ class _TrackingScreenState extends State<TrackingScreen> {
   List<LatLng> _route = const [];
   bool _routeSnapped = true;
   String _routeKey = '';
+  RideStatus? _lastStatus;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ride = context.read<RideCubit>().state;
+      _lastStatus = ride.ride?.status;
       if (ride.showDriverSheet) _showFound();
       _syncRoute();
     });
@@ -115,7 +118,29 @@ class _TrackingScreenState extends State<TrackingScreen> {
     });
 
     return Scaffold(
-      body: Stack(
+      body: BlocListener<RideCubit, RideState>(
+        listenWhen: (a, b) =>
+            b.ride != null &&
+            a.ride != null &&
+            a.ride!.status != b.ride!.status,
+        listener: (context, state) {
+          final ride = state.ride!;
+          final prev = _lastStatus;
+          _lastStatus = ride.status;
+          // Avoid spamming on initial mount (prev == null) or no real change.
+          if (prev == null || prev == ride.status) return;
+          final s = S.of(context);
+          final msg = switch (ride.status) {
+            RideStatus.driverArriving => s.driverArriving,
+            RideStatus.driverArrived => s.driverArrived,
+            RideStatus.inProgress => s.tripStarted,
+            _ => null,
+          };
+          if (msg != null && context.mounted) {
+            showAppSnack(context, msg);
+          }
+        },
+        child: Stack(
         children: [
           BrandedMap(
             center: ride.pickup,
@@ -154,6 +179,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                StatusPill(status: ride.status, etaMin: ride.driver?.etaMin),
                 if (inTrip)
                   Padding(
                     padding: const EdgeInsets.only(right: 16, bottom: 8),
@@ -255,6 +281,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
