@@ -40,6 +40,8 @@ jobs:
           sed -i 's/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' .env
           sed -i 's/CACHE_DRIVER=redis/CACHE_DRIVER=array/' .env
           sed -i 's/QUEUE_CONNECTION=redis/QUEUE_CONNECTION=sync/' .env
+          # Reverb is not installed on Laravel 9 — never boot artisan with it.
+          sed -i 's/BROADCAST_DRIVER=reverb/BROADCAST_DRIVER=log/' .env
           echo "DB_DATABASE=$(pwd)/database/database.sqlite" >> .env
           echo "REDIS_HOST=127.0.0.1" >> .env
           echo "REDIS_PORT=6379" >> .env
@@ -58,14 +60,16 @@ jobs:
           version: 10.0.0
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: pnpm
       - name: Install deps
         run: pnpm install --frozen-lockfile
       - name: Vitest unit tests
-        run: pnpm --filter admin-panel test
+        working-directory: apps/admin-panel
+        run: pnpm test
       - name: Build (lint + tsc + vite)
-        run: pnpm --filter admin-panel build
+        working-directory: apps/admin-panel
+        run: pnpm build
 
   flutter:
     name: Flutter analyze + test
@@ -105,7 +109,7 @@ jobs:
           version: 10.0.0
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: pnpm
       - name: Install Playwright
         run: |
