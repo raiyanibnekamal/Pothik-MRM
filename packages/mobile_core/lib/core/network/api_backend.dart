@@ -377,6 +377,7 @@ class ApiBackend extends MockBackend {
   /// Replaces the mock backend's in-memory list with the server's record
   /// for the authenticated user. Safe to call on every screen mount;
   /// failures leave the previous list intact.
+  @override
   Future<List<Ride>> refreshHistory() async {
     await _requireAuth();
     try {
@@ -812,7 +813,7 @@ class ApiBackend extends MockBackend {
       dropLabel: j['drop_address'] as String? ?? '',
       vehicleType: type,
       paymentMethod: (j['payment_method'] as String? ?? 'CASH').toUpperCase(),
-      pin: j['pin'] as String?,
+      pin: j['pin'] as String? ?? '0000',
       driverPoint: driverJson != null &&
               driverJson['lat'] != null &&
               driverJson['lng'] != null

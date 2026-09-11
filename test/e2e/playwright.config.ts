@@ -22,6 +22,7 @@ export default defineConfig({
     env: {
       VITE_USE_MOCK: "true",
       VITE_API_URL: "http://localhost:8000/api/v1",
+      VITE_QA_PASSWORD: "123456",
     },
   },
 })

@@ -193,7 +193,7 @@ class _PassengerHomeTabState extends State<PassengerHomeTab> {
                 children: [
                   Expanded(child: Text(s.forYou, style: AppText.subhead())),
                   Pressable(
-                    onTap: onOpenServices,
+                    onTap: widget.onOpenServices,
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
                       width: 36,

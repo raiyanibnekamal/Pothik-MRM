@@ -39,9 +39,6 @@ jobs:
   admin:
     name: Admin panel (vitest + build)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/admin-panel
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -52,9 +49,9 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
       - name: Vitest unit tests
-        run: pnpm vitest run
+        run: pnpm --filter admin-panel test
       - name: Build (lint + tsc + vite)
-        run: pnpm build
+        run: pnpm --filter admin-panel build
 
   flutter:
     name: Flutter analyze + test

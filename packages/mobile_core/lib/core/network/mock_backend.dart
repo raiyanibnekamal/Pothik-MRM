@@ -377,4 +377,7 @@ class MockBackend {
       debt: sessionUser?.commissionDebtBdt ?? (qa ? 0 : 370),
     );
   }
+
+  /// No-op for mock mode; returns the in-memory [history] list.
+  Future<List<Ride>> refreshHistory() async => List<Ride>.from(history);
 }
