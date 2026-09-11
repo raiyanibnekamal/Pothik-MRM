@@ -49,3 +49,11 @@ apps/**/ios/Flutter/Flutter.podspec
 coverage/
 .DS_Store
 Thumbs.db
+
+# Agent / local scratch (never commit)
+.puku/
+apps/api/_*.php
+apps/api/test-output.txt
+apps/api/.rnd
+scripts/step*.ps1
+scripts/fix-prune-otps-bom.ps1

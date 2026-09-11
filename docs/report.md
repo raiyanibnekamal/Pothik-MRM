@@ -3,9 +3,9 @@
 | Field | Value |
 |-------|-------|
 | **Project** | Pothik MRM / BD Ride Share (বিডি রাইড শেয়ার) |
-| **Version** | 2.1 (playbook) |
-| **Audit date** | 2026-09-11 |
-| **Last commit audited** | `0fd0a70` (main) |
+| **Version** | 2.2 (playbook) |
+| **Audit date** | 2026-09-12 |
+| **Last commit audited** | `f31cefc` (main) |
 | **Repo** | [github.com/raiyanibnekamal/Pothik-MRM](https://github.com/raiyanibnekamal/Pothik-MRM) |
 | **Purpose** | এই ফাইল ধরে সেকশন অনুযায়ী কাজ করলে প্রজেক্ট **54/100 → 78/100 → 85–90/100** (one-city beta) হয় |
 
@@ -57,9 +57,19 @@ flowchart TD
 | Investor / demo pitch | 80/100 |
 | University / portfolio | 84/100 |
 
-**Status:** S0–S4.3 + S5 test additions are merged in this iteration. S2 (full WebSocket dispatch via Reverb) + S6 (staging deploy) remain. Mobile now talks to the real Laravel API end-to-end (`USE_API=true`), trips hydrate history from `GET /rides`, fares use `POST /rides/estimate`, PIN is verified server-side, and the admin shell subscribes to `admin:sos:alert` over the socket with a 5s/8s poll as a fallback.
+**Status:** S0–S6 code merged. CI pipeline **4/4 green** on `main` (2026-09-12). Remaining launch gaps are **credentials + first VPS deploy** (SSL Wireless SMS, staging DNS, GPG verified badge on GitHub).
 
-**Evidence (2026-09-11):** `php artisan test` → **95 passed (+4 S0/S2/S4 regressions)** · Flutter ~26 tests (`flutter analyze` green on edited files) · Admin Vitest ~22 · E2E 1 spec · `laravel/reverb` composer-এ নেই (broadcast events fire onto the in-process queue; mounting to Reverb is S2.1–S2.2 work) · Mobile builds with `--dart-define=USE_API=true` hit Laravel directly.
+**Evidence (2026-09-12, commit `f31cefc`):**
+
+| Gate | Result |
+|------|--------|
+| `php artisan test` | **107 passed** |
+| Admin Vitest + build | **22 passed** + Vite build OK |
+| Flutter analyze + test | **green** (mobile_core, passenger, driver) |
+| Admin E2E smoke | **1 spec passed** |
+| GitHub Actions CI #25 | **4/4 success** — [run](https://github.com/raiyanibnekamal/Pothik-MRM/actions/runs/34629159916) |
+
+Mobile talks to real Laravel API (`USE_API=true`); admin SOS socket + poll fallback wired. Docker prod stack + `deploy-staging.yml` ready — see [`staging-deploy-walkthrough.md`](./staging-deploy-walkthrough.md).
 
 ---
 
@@ -72,13 +82,13 @@ flowchart TD
 | **S2** | WebSocket dispatch end-to-end | 1–1.5 weeks | **78** | ✅ done (2026-09-11 — S2.1 + S2.2 + S2.3) |
 | **S3** | Admin live SOS + map | 3–4 days | **81** | ✅ done (2026-09-11) |
 | **S4** | Production SMS + FCM + cash-only | 1 week | **85** | ✅ done — S4.2 FCM listeners + tests (102 total); S4.1 SSL creds still user-side |
-| **S5** | Tests + CI gates | 1 week | **88** | ✅ done — 107 PHP tests (102 + 5 health); CI gate wires admin vitest |
-| **S6** | Staging deploy + monitoring | 1–2 weeks | **88** | ✅ done — Dockerfile.prod, docker-compose.prod, Caddy TLS, deploy-staging.yml, Sentry, runbook |
+| **S5** | Tests + CI gates | 1 week | **88** | ✅ done — 107 PHP tests; CI **4/4 green** (API, Admin vitest+build, Flutter, E2E) |
+| **S6** | Staging deploy + monitoring | 1–2 weeks | **88** | ✅ code done — Dockerfile.prod, compose, Caddy, deploy workflow, runbook; **first VPS deploy manual** |
 
 **Minimum launch (beta):** S0–S4 complete = **85/100**.  
 **Full production ops:** + S5 + S6 = **90/100**.
 
-**Current verified score: ~80/100** — backend security hardened (S0), mobile on real Laravel API (S1), Reverb declared and broadcast events firing (S2), admin live SOS + map mounted (S3), cash-only enforced (S4.3). Remaining gaps are credentials (S4.1, S4.2), test/CI breadth (S5), and staging infrastructure (S6).
+**Current verified score: ~88/100 (code)** — S0–S6 implemented, CI green. **Ops gap:** SSL Wireless creds, staging VPS + DNS, first `staging` branch deploy. Walkthrough: [`staging-deploy-walkthrough.md`](./staging-deploy-walkthrough.md).
 
 ---
 
@@ -316,7 +326,7 @@ Gateway **code already exists** (`Sms/`, `Fcm/`, `Payment/`). Default সব `nu
   - Public track **does not** include PIN — ✅ (`SecurityHardeningTest::pin_is_hidden_from_other_users`)
   - Push listener coverage — ✅ (`PushNotificationTest`: 2 tests)
   - Health endpoint regression — ✅ (`HealthCheckTest`: 5 tests)
-- **Verify:** `cd apps/api && php artisan test` → **95 passed**। Target 110+ এ পৌঁছাতে SOS + dispatch + KYC gap টেস্ট বাকি।
+- **Verify:** `cd apps/api && php artisan test` → **107 passed** (2026-09-12)। Target 110+ এ dispatch timeout + admin KYC HTTP tests বাকি।
 
 ### S5.2 Flutter cubit / ApiBackend tests — +1
 
@@ -332,7 +342,7 @@ Gateway **code already exists** (`Sms/`, `Fcm/`, `Payment/`). Default সব `nu
 - **Change:**
   - Job: `pnpm --filter admin-panel test` and `pnpm lint:admin` — ✅ split into vitest + build jobs
   - E2E: `VITE_QA_PASSWORD: "123456"` (mock login today requires it in `client.ts`)
-- **Verify:** Push to a branch → all four CI jobs + new vitest green. ✅ `ci.yml` now runs 4 jobs (api / admin / flutter / e2e); admin job runs `pnpm vitest run` before `pnpm build`.
+- **Verify:** Push to `main` → all four CI jobs green. ✅ CI #25 (`f31cefc`): Laravel API · Admin panel (vitest + build) · Flutter analyze + test · Admin E2E smoke — all success. Admin job runs from `apps/admin-panel` with Node 22.
 
 **S5 done when:** CI fails if ride lifecycle, OTP, or admin KYC regressions land.
 
@@ -361,7 +371,7 @@ Gateway **code already exists** (`Sms/`, `Fcm/`, `Payment/`). Default সব `nu
 
 **S6 done when:** Staging URL + TLS + health + one real OTP + one cash ride documented in a runbook.
 
-✅ Done — runbook shipped at [`docs/runbook-staging.md`](./runbook-staging.md) (bootstrap, daily deploy, smoke checks, ops commands, failure-mode table). Staging DNS + first deploy remain the only manual steps.
+✅ Done — runbook at [`docs/runbook-staging.md`](./runbook-staging.md) + step-by-step [`docs/staging-deploy-walkthrough.md`](./staging-deploy-walkthrough.md). Staging DNS + GitHub secrets + first `staging` push remain manual.
 
 ---
 
@@ -381,10 +391,10 @@ Gateway **code already exists** (`Sms/`, `Fcm/`, `Payment/`). Default সব `nu
 ### Full production ops — 90/100
 
 - [ ] Above + FCM push
-- [ ] Staging HTTPS + deploy workflow
-- [ ] Sentry
-- [ ] CI includes admin vitest + extra PHP/Flutter tests
-- [ ] Runbook: backup, rollback, on-call
+- [x] Staging HTTPS + deploy workflow (code ready; VPS deploy pending)
+- [x] Sentry (Laravel channel wired; DSN user-side)
+- [x] CI includes admin vitest + PHP/Flutter tests (**4/4 green**)
+- [x] Runbook: backup, rollback, on-call ([`runbook-staging.md`](./runbook-staging.md))
 
 ### Post-launch (95+) — এই playbook-এর বাইরে
 

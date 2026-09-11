@@ -2,7 +2,7 @@
 
 Uber-class ride-hailing platform for Bangladesh — a **pnpm + Flutter monorepo** with a Laravel API, React admin panel, and shared mobile core for passenger and driver apps.
 
-**Production readiness:** **88/100** (audit 2026-09-11) — S0–S5 + S6 wired; 107 PHP tests green (102 feature + 5 health), production Dockerfile + Caddy + Sentry + deploy workflow in place. **Next:** S4.1 real SMS + FCM credentials (user-side), staging DNS A-records + first deploy. Staging runbook: [docs/runbook-staging.md](docs/runbook-staging.md). Section playbook: [docs/report.md](docs/report.md).
+**Production readiness:** **88/100** (audit 2026-09-12) — S0–S6 wired; CI **4/4 green** on `main`; 107 PHP tests + 22 Vitest + Flutter tests. **Next:** SSL SMS creds + first VPS deploy. [Staging walkthrough](docs/staging-deploy-walkthrough.md) · [Runbook](docs/runbook-staging.md) · [Playbook](docs/report.md).
 
 | Layer | Stack |
 |---|---|
@@ -11,7 +11,7 @@ Uber-class ride-hailing platform for Bangladesh — a **pnpm + Flutter monorepo*
 | **Admin** | React 19 · Vite · Tailwind · Leaflet · Pusher-js |
 | **Maps (mobile)** | flutter_map · OpenStreetMap tiles · Nominatim · OSRM |
 | **Real-time** | Laravel Reverb (Docker) · broadcast events · Pusher client |
-| **CI** | GitHub Actions — API, Admin, Flutter, E2E |
+| **CI** | GitHub Actions — API, Admin (vitest+build), Flutter, E2E — **4/4 green** |
 
 **Docs:** [PRD](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Project structure](docs/PROJECT_STRUCTURE.md) · [Contributing](docs/CONTRIBUTING.md) · [Production playbook](docs/report.md)
 

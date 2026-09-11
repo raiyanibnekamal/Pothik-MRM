@@ -3,6 +3,8 @@
 This runbook covers the staging deploy documented in `docs/report.md` S6. It
 assumes a single $10 VPS running Ubuntu 22.04 LTS in the Dhaka region.
 
+> **First time?** Follow [`staging-deploy-walkthrough.md`](./staging-deploy-walkthrough.md) end-to-end before using this runbook.
+
 > **Audience:** on-call engineer with shell + docker access. No app
 > knowledge required.
 
@@ -22,7 +24,7 @@ sudo usermod -aG docker deploy
 exit
 
 # 1.2 — Repo checkout
-ssh deploy@staging.pothik.example.com "git clone https://github.com/pothik/bd-ride-share.git /opt/pothik"
+ssh deploy@staging.pothik.example.com "git clone https://github.com/raiyanibnekamal/Pothik-MRM.git /opt/pothik"
 
 # 1.3 — Secrets (NEVER commit these)
 ssh deploy@staging.pothik.example.com
@@ -138,4 +140,4 @@ Pager rotation lives in Linear (ops team). Initial on-call: ops@pothik.example.
 
 ---
 
-Last verified: 2026-09-11 (S6.1 + S6.2 + S6.3 in place).
+Last verified: 2026-09-12 (CI #25 green; walkthrough added).
